@@ -6,22 +6,61 @@ POST /register  → crea asistente + genera QR + muestra resultado
 
 import io
 import os
+import base64
+import uuid
+from html import escape as _html_escape
 
 import qrcode
-from fastapi import Form, Request
-from fastapi.responses import HTMLResponse, Response
+from fastapi import APIRouter, Form, Response
+from fastapi.responses import HTMLResponse
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select
 
 from app.database import async_session
 from app.models import Attendee
-from app.main import app
 
-import uuid
+router = APIRouter()
 
 
-@app.get("/register", response_class=HTMLResponse)
-async def register_page(request: Request):
+def _base_url() -> str:
+    domain = os.getenv("DOMAIN", "localhost")
+    if domain.startswith("http"):
+        return domain
+    return f"https://{domain}"
+
+
+def _b64(data: bytes) -> str:
+    return base64.b64encode(data).decode()
+
+
+def _make_qr_with_name(url: str, name: str) -> bytes:
+    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=4)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+
+    w, h = img.size
+    label_h = 32
+    canvas = Image.new("RGB", (w, h + label_h), "white")
+    canvas.paste(img, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    try:
+        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
+    except (OSError, IOError):
+        font = ImageFont.load_default()
+    bbox = draw.textbbox((0, 0), name, font=font)
+    text_w = bbox[2] - bbox[0]
+    x = max(0, (w - text_w) // 2)
+    draw.text((x, h + 8), name, fill="black", font=font)
+
+    buf = io.BytesIO()
+    canvas.save(buf, format="PNG", optimize=True)
+    buf.seek(0)
+    return buf.read()
+
+
+@router.get("/register", response_class=HTMLResponse)
+async def register_page():
     """Formulario de registro para invitados."""
     return """
 <!DOCTYPE html>
@@ -87,7 +126,7 @@ async def register_page(request: Request):
 """
 
 
-@app.post("/register", response_class=HTMLResponse)
+@router.post("/register", response_class=HTMLResponse)
 async def register_submit(
     nombre: str = Form(...),
     email: str = Form(...),
@@ -203,7 +242,7 @@ async def register_submit(
 """
 
 
-@app.get("/qr-download/{hash_id}")
+@router.get("/qr-download/{hash_id}")
 async def download_qr(hash_id: str):
     """Descarga el QR de un asistente como archivo PNG."""
     async with async_session() as session:
