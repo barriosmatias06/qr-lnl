@@ -361,7 +361,7 @@ function renderTable(data) {
     var qrToken = a.qr_token || a.hash_unique || '';
 
     rows.push('<tr>' +
-      '<td><span class="qr-mini" onclick="showQR(\'' + esc(qrToken) + '\',\'' + esc(fullName) + '\')">📱</span></td>' +
+      '<td><span class="qr-mini" onclick="showQR(' + "'" + esc(qrToken) + "'" + ',' + "'" + esc(fullName) + "'" + ')">📱</span></td>' +
       '<td>' + esc(a.nombre) + '</td>' +
       '<td>' + esc(a.apellido || '—') + '</td>' +
       '<td>' + esc(a.nro_documento || '—') + '</td>' +
@@ -446,8 +446,8 @@ function loadInvitations() {
           actions = '<span style="color:var(--muted);font-size:.75rem">—</span>';
         } else {
           actions = '<div class="inv-actions">' +
-            '<button class="btn btn-sm btn-danger" onclick="revokeCode(' + c.id + ',\'' + esc(c.code) + '\')">Revocar</button>' +
-            '<button class="btn btn-sm" style="background:var(--orange)" onclick="deleteCode(' + c.id + ',\'' + esc(c.code) + '\')">Eliminar</button>' +
+            '<button class="btn btn-sm btn-danger" onclick="revokeCode(' + c.id + ',' + "'" + esc(c.code) + "'" + ')">Revocar</button>' +
+            '<button class="btn btn-sm" style="background:var(--orange)" onclick="deleteCode(' + c.id + ',' + "'" + esc(c.code) + "'" + ')">Eliminar</button>' +
             '</div>';
         }
 
@@ -457,7 +457,7 @@ function loadInvitations() {
 
         rows.push('<tr>' +
           '<td><span class="inv-code">' + esc(c.code) + '</span>' +
-            '<span class="copy-btn" onclick="copyCode(\'' + esc(c.code) + '\')" title="Copiar">📋</span></td>' +
+            '<span class="copy-btn" onclick="copyCode(' + "'" + esc(c.code) + "'" + ')" title="Copiar">📋</span></td>' +
           '<td>' + st + '</td>' +
           '<td>' + (c.creado_en || '—') + '</td>' +
           '<td>' + usedBy + '</td>' +
@@ -532,7 +532,7 @@ function doGenerate() {
         var code = lastGeneratedCodes[i];
         html += '<div class="gen-code-item">' +
           '<span class="inv-code">' + esc(code) + '</span>' +
-          '<span class="copy-btn" onclick="copyCode(\'' + esc(code) + '\')">📋</span>' +
+          '<span class="copy-btn" onclick="copyCode(' + "'" + esc(code) + "'" + ')">📋</span>' +
           '</div>';
       }
       var listEl = document.getElementById('gen-codes-list');

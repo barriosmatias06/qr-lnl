@@ -343,14 +343,16 @@
 </head>
 <body>
 
-<!-- ── Landing: ESCANEAR + ADMIN ─────────────────────────────────────────── -->
+<!-- ── Landing: solo ESCANEAR ──────────────────────────────────────────── -->
 <div id="landing">
   <div class="landing-emoji">🎫</div>
   <h1 class="landing-title">Control de Acceso</h1>
-  <p class="landing-sub">Seleccioná una opción</p>
+  <p class="landing-sub">Escaneá tu código QR para ingresar</p>
   <button class="landing-btn btn-escanear" onclick="goScan()">📷 Escanear</button>
-  <a href="/admin" class="landing-btn btn-admin-land">🛡️ Administrador</a>
 </div>
+
+<!-- ── Botón Admin (esquina superior derecha) ──────────────────────────── -->
+<a href="/admin" class="btn-admin" id="btn-admin" style="display:flex;position:fixed;top:12px;right:12px;z-index:500;background:rgba(30,41,59,0.9);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:8px;color:var(--muted);padding:8px 16px;font-size:.8rem;font-weight:600;text-decoration:none;align-items:center;gap:5px;transition:color .15s,border-color .15s">🛡️ Admin</a>
 
 <!-- ── Botón volver ──────────────────────────────────────────────────────── -->
 <button class="btn-back" id="btn-back" onclick="goHome()">← Inicio</button>
