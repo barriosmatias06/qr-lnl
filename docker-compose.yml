@@ -24,6 +24,8 @@ services:
     restart: unless-stopped
     expose:
       - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
     environment:
       DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-evento}:${POSTGRES_PASSWORD:-evento_pass}@db:5432/${POSTGRES_DB:-evento_db}"
       QR_IMAGES_DIR: /app/qr_codes
