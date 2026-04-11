@@ -6,7 +6,7 @@ import io
 import base64
 import random
 import string
-from datetime import datetime
+from datetime import datetime, timezone
 
 import qrcode
 from fastapi import APIRouter, Depends, Query, Request
@@ -52,13 +52,9 @@ def _make_qr(hash_id: str) -> bytes:
     return buf.read()
 
 
-@router.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(request: Request):
-    """Panel de administración con estadísticas y listado."""
-    user = await get_current_user(request)
-    if not user:
-        return RedirectResponse(url="/admin/login", status_code=302)
-    return """<!DOCTYPE html>
+# ── Admin Dashboard HTML ──────────────────────────────────────────────────
+
+ADMIN_HTML = """<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -76,12 +72,12 @@ async def admin_dashboard(request: Request):
             padding:16px 24px;display:flex;align-items:center;justify-content:space-between}
     .topbar h1{font-size:1.2rem;font-weight:700}
     .topbar .badge{background:var(--blue);color:#fff;padding:4px 12px;border-radius:20px;font-size:.75rem}
-    .tabs{display:flex;gap:0;background:var(--card);border-bottom:1px solid var(--border)}
-    .tab{padding:12px 24px;cursor:pointer;font-size:.9rem;font-weight:600;color:var(--muted);
-         border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
-    .tab:hover{color:var(--text)}
-    .tab.active{color:var(--blue);border-bottom-color:var(--blue)}
     .container{max-width:1200px;margin:0 auto;padding:24px}
+    .tabs{display:flex;gap:4px;margin-bottom:24px}
+    .tab{padding:10px 20px;border-radius:10px 10px 0 0;background:var(--card);
+         border:1px solid var(--border);border-bottom:none;color:var(--muted);
+         cursor:pointer;font-weight:600;font-size:.85rem;transition:color .15s}
+    .tab.active{color:var(--blue);border-color:var(--blue);background:var(--bg)}
     .tab-content{display:none}
     .tab-content.active{display:block}
     .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:28px}
@@ -92,6 +88,8 @@ async def admin_dashboard(request: Request):
     .s-ingresaron .stat-num{color:var(--green)}
     .s-pendientes .stat-num{color:var(--orange)}
     .s-lugares .stat-num{color:var(--yellow)}
+    .s-inv-used .stat-num{color:var(--green)}
+    .s-inv-unused .stat-num{color:var(--yellow)}
     .search-bar{margin-bottom:20px;display:flex;gap:12px}
     .search-bar input{flex:1;background:var(--card);border:1px solid var(--border);
                       border-radius:10px;color:var(--text);padding:12px 16px;font-size:.95rem}
@@ -106,8 +104,8 @@ async def admin_dashboard(request: Request):
     tr:hover td{background:#1e293b}
     .status{padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600}
     .status.in{background:rgba(34,197,94,.15);color:var(--green)}
-    .status.used{background:rgba(239,68,68,.15);color:var(--red)}
     .status.pending{background:rgba(249,115,22,.15);color:var(--orange)}
+    .status.used{background:rgba(239,68,68,.15);color:var(--red)}
     .status.unused{background:rgba(34,197,94,.15);color:var(--green)}
     .qr-mini{cursor:pointer;opacity:.6;transition:opacity .15s}
     .qr-mini:hover{opacity:1}
@@ -120,25 +118,36 @@ async def admin_dashboard(request: Request):
     .modal-content button{background:var(--blue);color:#fff;border:none;border-radius:8px;
                           padding:10px 20px;font-weight:600;cursor:pointer}
     .no-data{text-align:center;padding:60px 20px;color:var(--muted)}
-    .inv-toolbar{display:flex;gap:12px;margin-bottom:20px;align-items:center;flex-wrap:wrap}
     .btn{background:var(--blue);color:#fff;border:none;border-radius:10px;padding:10px 18px;
-         font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+         font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .15s}
     .btn:hover{opacity:.9}
-    .btn-sm{padding:6px 14px;font-size:.8rem;border-radius:8px}
+    .btn:active{opacity:.8}
     .btn-danger{background:var(--red)}
-    .btn-ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
-    .btn-ghost:hover{border-color:var(--blue)}
-    .code-text{font-family:monospace;font-size:1.05rem;font-weight:700;letter-spacing:.05em}
-    .inv-stats{display:flex;gap:20px;margin-bottom:20px}
-    .inv-stat{display:flex;align-items:center;gap:6px;font-size:.9rem}
-    .inv-stat-num{font-weight:700;font-size:1.1rem}
-    .inv-stat-label{color:var(--muted);font-size:.8rem}
-    .copy-btn{cursor:pointer;opacity:.7;transition:opacity .15s}
+    .btn-sm{padding:6px 12px;font-size:.75rem;border-radius:8px}
+    .btn-success{background:var(--green)}
+    .inv-toolbar{display:flex;gap:12px;margin-bottom:20px;align-items:center;flex-wrap:wrap}
+    .inv-toolbar select{background:var(--card);border:1px solid var(--border);border-radius:10px;
+                        color:var(--text);padding:10px;font-size:.85rem}
+    .inv-code{font-family:monospace;font-weight:700;letter-spacing:.05em;font-size:.95rem}
+    .inv-actions{display:flex;gap:6px}
+    .pagination{display:flex;gap:8px;justify-content:center;margin-top:20px;align-items:center}
+    .pagination button{background:var(--card);border:1px solid var(--border);border-radius:8px;
+                       color:var(--text);padding:8px 14px;font-size:.8rem;cursor:pointer}
+    .pagination button:disabled{opacity:.4;cursor:default}
+    .pagination button:hover:not(:disabled){border-color:var(--blue)}
+    .pagination span{color:var(--muted);font-size:.8rem}
+    .copy-btn{cursor:pointer;opacity:.5;transition:opacity .15s;margin-left:6px;font-size:1rem}
     .copy-btn:hover{opacity:1}
     .toast{position:fixed;bottom:20px;right:20px;background:var(--green);color:#fff;
            padding:12px 20px;border-radius:10px;font-size:.9rem;font-weight:600;
            opacity:0;transition:opacity .2s;z-index:200;pointer-events:none}
     .toast.show{opacity:1}
+    .whatsapp-btn{background:#25D366;color:#fff}
+    .whatsapp-btn:hover{opacity:.9}
+    .gen-codes-box{margin-top:16px;text-align:left;max-height:250px;overflow-y:auto}
+    .gen-code-item{display:flex;justify-content:space-between;align-items:center;
+                   padding:8px 12px;border-bottom:1px solid var(--border);gap:8px}
+    .gen-code-item:last-child{border-bottom:none}
   </style>
 </head>
 <body>
@@ -146,42 +155,29 @@ async def admin_dashboard(request: Request):
     <h1>🎫 Panel de Administración</h1>
     <span class="badge" id="last-update">—</span>
   </div>
-  <div class="tabs">
-    <div class="tab active" data-tab="attendees" onclick="switchTab('attendees')">👥 Asistentes</div>
-    <div class="tab" data-tab="invitations" onclick="switchTab('invitations')">🎟️ Códigos Invitación</div>
-  </div>
+  <div class="container">
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="attendees" onclick="switchTab('attendees')">👥 Asistentes</div>
+      <div class="tab" data-tab="invitations" onclick="switchTab('invitations')">🎟️ Invitaciones</div>
+    </div>
 
-  <!-- TAB: Asistentes -->
-  <div class="tab-content active" id="tab-attendees">
-    <div class="container">
+    <!-- TAB: Asistentes -->
+    <div class="tab-content active" id="tab-attendees">
       <div class="stats">
-        <div class="stat s-total">
-          <div class="stat-num" id="s-total">—</div>
-          <div class="stat-label">Registrados</div>
-        </div>
-        <div class="stat s-ingresaron">
-          <div class="stat-num" id="s-ingresaron">—</div>
-          <div class="stat-label">Ingresaron</div>
-        </div>
-        <div class="stat s-pendientes">
-          <div class="stat-num" id="s-pendientes">—</div>
-          <div class="stat-label">Pendientes</div>
-        </div>
-        <div class="stat s-lugares">
-          <div class="stat-num" id="s-lugares">—</div>
-          <div class="stat-label">Lugares libres</div>
-        </div>
+        <div class="stat s-total"><div class="stat-num" id="s-total">—</div><div class="stat-label">Registrados</div></div>
+        <div class="stat s-ingresaron"><div class="stat-num" id="s-ingresaron">—</div><div class="stat-label">Ingresaron</div></div>
+        <div class="stat s-pendientes"><div class="stat-num" id="s-pendientes">—</div><div class="stat-label">Pendientes</div></div>
+        <div class="stat s-lugares"><div class="stat-num" id="s-lugares">—</div><div class="stat-label">Lugares libres</div></div>
       </div>
-
       <div class="search-bar">
-        <input type="text" id="search" placeholder="Buscar por nombre, apellido o documento..." autocomplete="off">
+        <input type="text" id="search" placeholder="Buscar por nombre, apellido, documento o código..." autocomplete="off">
         <select id="filter-status">
           <option value="all">Todos</option>
           <option value="in">Ingresaron</option>
           <option value="pending">Pendientes</option>
         </select>
       </div>
-
       <div id="table-wrap">
         <div class="loading" id="loading">Cargando datos...</div>
         <table id="table" style="display:none">
@@ -191,6 +187,7 @@ async def admin_dashboard(request: Request):
               <th>Nombre</th>
               <th>Apellido</th>
               <th>Documento</th>
+              <th>Código Inv.</th>
               <th>Invitado por</th>
               <th>Estado</th>
               <th>Ingreso</th>
@@ -201,56 +198,44 @@ async def admin_dashboard(request: Request):
         <div class="no-data" id="no-data" style="display:none">No se encontraron resultados</div>
       </div>
     </div>
-  </div>
 
-  <!-- TAB: Invitaciones -->
-  <div class="tab-content" id="tab-invitations">
-    <div class="container">
-      <div class="inv-stats">
-        <div class="inv-stat">
-          <span class="inv-stat-num" id="inv-total">0</span>
-          <span class="inv-stat-label">Total</span>
-        </div>
-        <div class="inv-stat">
-          <span class="inv-stat-num" style="color:var(--green)" id="inv-unused">0</span>
-          <span class="inv-stat-label">Disponibles</span>
-        </div>
-        <div class="inv-stat">
-          <span class="inv-stat-num" style="color:var(--red)" id="inv-used">0</span>
-          <span class="inv-stat-label">Usados</span>
-        </div>
+    <!-- TAB: Invitaciones -->
+    <div class="tab-content" id="tab-invitations">
+      <div class="stats">
+        <div class="stat s-total"><div class="stat-num" id="inv-total">—</div><div class="stat-label">Total</div></div>
+        <div class="stat s-inv-used"><div class="stat-num" id="inv-used">—</div><div class="stat-label">Usados</div></div>
+        <div class="stat s-inv-unused"><div class="stat-num" id="inv-unused">—</div><div class="stat-label">Disponibles</div></div>
       </div>
-
       <div class="inv-toolbar">
-        <button class="btn" onclick="generateCodes()">🎟️ Generar Códigos</button>
-        <select id="inv-filter" onchange="loadInvitations(1)" style="background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px;font-size:.9rem">
+        <button class="btn btn-success" onclick="openGenerateModal()">+ Crear Código</button>
+        <select id="inv-filter" onchange="invPage=1;loadInvitations()">
           <option value="all">Todos</option>
           <option value="unused">Disponibles</option>
           <option value="used">Usados</option>
         </select>
       </div>
-
       <div id="inv-table-wrap">
-        <table id="inv-table">
+        <div class="loading" id="inv-loading">Cargando invitaciones...</div>
+        <table id="inv-table" style="display:none">
           <thead>
             <tr>
               <th>Código</th>
               <th>Estado</th>
               <th>Creado</th>
-              <th>Usado en</th>
+              <th>Usado por</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody id="inv-tbody"></tbody>
         </table>
+        <div class="no-data" id="inv-no-data" style="display:none">No hay códigos de invitación.<br>Hacé clic en <strong>"+ Crear Código"</strong> para generar.</div>
+        <div class="pagination" id="inv-pagination"></div>
       </div>
-
-      <div id="inv-pagination" style="display:flex;justify-content:center;gap:8px;margin-top:20px"></div>
     </div>
   </div>
 
   <!-- QR Modal -->
-  <div class="modal" id="qr-modal" onclick="closeModal(event)">
+  <div class="modal" id="qr-modal" onclick="if(event.target===this)this.classList.remove('open')">
     <div class="modal-content">
       <img id="modal-qr-img" src="" alt="QR" style="max-width:220px">
       <p id="modal-name" style="font-weight:600;margin-bottom:12px"></p>
@@ -259,19 +244,23 @@ async def admin_dashboard(request: Request):
   </div>
 
   <!-- Generate Codes Modal -->
-  <div class="modal" id="gen-modal" onclick="closeGenModal(event)">
+  <div class="modal" id="generate-modal" onclick="if(event.target===this)this.classList.remove('open')">
     <div class="modal-content" style="max-width:400px">
-      <p style="font-size:1.1rem;font-weight:700;margin-bottom:16px">Generar Códigos de Invitación</p>
-      <label style="display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px;text-align:left">Cantidad (1-100)</label>
-      <input type="number" id="gen-count" value="10" min="1" max="100"
-        style="width:100%;background:#0f172a;border:1px solid #475569;border-radius:10px;color:var(--text);padding:12px;font-size:1rem;margin-bottom:20px;text-align:center">
-      <div style="display:flex;gap:10px">
-        <button class="btn" style="flex:1" onclick="doGenerate()">Generar</button>
-        <button class="btn btn-ghost" style="flex:1" onclick="closeGenModal()">Cancelar</button>
+      <p style="font-weight:600;margin-bottom:16px;font-size:1.1rem">🎟️ Crear Códigos de Invitación</p>
+      <div style="display:flex;gap:10px;align-items:center;justify-content:center;margin-bottom:20px">
+        <label for="gen-count" style="font-size:.85rem;color:var(--muted)">Cantidad:</label>
+        <input type="number" id="gen-count" value="10" min="1" max="100"
+               style="width:80px;background:#0f172a;border:1px solid var(--border);border-radius:8px;
+                      color:var(--text);padding:8px;text-align:center;font-size:.9rem">
       </div>
-      <div id="gen-result" style="margin-top:16px;max-height:200px;overflow-y:auto;text-align:left;display:none">
-        <p style="font-size:.85rem;color:var(--muted);margin-bottom:8px">Códigos generados:</p>
-        <div id="gen-codes-list"></div>
+      <button class="btn" onclick="doGenerate()" style="width:100%;margin-bottom:12px">Generar Códigos</button>
+      <button class="btn" style="width:100%;background:transparent;border:1px solid var(--border)" onclick="document.getElementById('generate-modal').classList.remove('open')">Cerrar</button>
+      <div id="generated-codes" style="display:none">
+        <div class="gen-codes-box" id="gen-codes-list"></div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn btn-sm" style="flex:1" onclick="copyAllCodes()">📋 Copiar Todos</button>
+          <button class="btn btn-sm whatsapp-btn" style="flex:1" onclick="shareAllWhatsApp()">💬 WhatsApp</button>
+        </div>
       </div>
     </div>
   </div>
@@ -280,30 +269,32 @@ async def admin_dashboard(request: Request):
   <div class="toast" id="toast"></div>
 
 <script>
-  let ALL_DATA = [];
-  let INV_PAGE = 1;
-  const CAPACITY = 1800;
+  var ALL_DATA = [];
+  var invPage = 1;
+  var lastGeneratedCodes = [];
+  var CAPACITY = 1800;
 
-  function switchTab(tab) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.querySelector(\`.tab[data-tab="\${tab}"]\`).classList.add('active');
-    document.getElementById('tab-' + tab).classList.add('active');
-    if (tab === 'invitations') loadInvitations(1);
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
+    document.querySelector('.tab[data-tab="' + name + '"]').classList.add('active');
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'invitations') { invPage = 1; loadInvitations(); }
   }
 
-  async function loadData() {
-    const res = await fetch('/api/admin/data');
-    const json = await res.json();
-    ALL_DATA = json.attendees;
-    renderStats(json);
-    renderTable(ALL_DATA);
-    document.getElementById('last-update').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+  // ── Attendees ─────────────────────────────────────────────────────────
+  function loadData() {
+    fetch('/api/admin/data').then(function(r) { return r.json(); }).then(function(json) {
+      ALL_DATA = json.attendees;
+      renderStats(json);
+      renderTable(ALL_DATA);
+      document.getElementById('last-update').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+    }).catch(function() {});
   }
 
   function renderStats(json) {
-    const total = json.total;
-    const ingresaron = json.ingresaron;
+    var total = json.total;
+    var ingresaron = json.ingresaron;
     document.getElementById('s-total').textContent = total;
     document.getElementById('s-ingresaron').textContent = ingresaron;
     document.getElementById('s-pendientes').textContent = total - ingresaron;
@@ -311,153 +302,217 @@ async def admin_dashboard(request: Request):
   }
 
   function renderTable(data) {
-    const tbody = document.getElementById('tbody');
-    const table = document.getElementById('table');
-    const loading = document.getElementById('loading');
-    const noData = document.getElementById('no-data');
+    var tbody = document.getElementById('tbody');
+    var table = document.getElementById('table');
+    var loading = document.getElementById('loading');
+    var noData = document.getElementById('no-data');
     loading.style.display = 'none';
 
     if (!data.length) { noData.style.display = 'block'; table.style.display = 'none'; return; }
     noData.style.display = 'none';
     table.style.display = 'table';
 
-    tbody.innerHTML = data.map(a => {
-      const status = a.estado_ingreso
+    var html = '';
+    for (var i = 0; i < data.length; i++) {
+      var a = data[i];
+      var status = a.estado_ingreso
         ? '<span class="status in">✓ Ingresó</span>'
         : '<span class="status pending">Pendiente</span>';
-      const fecha = a.fecha_ingreso || '—';
-      return \`<tr>
-        <td><span class="qr-mini" onclick="showQR('\${a.hash_unique}','\${(a.nombre + ' ' + a.apellido).replace(/'/g,"\\\\'")}')">📱</span></td>
-        <td>\${esc(a.nombre)}</td>
-        <td>\${esc(a.apellido || '—')}</td>
-        <td class="code-text">\${esc(a.nro_documento || '—')}</td>
-        <td>\${esc(a.invitado_por || '—')}</td>
-        <td>\${status}</td>
-        <td>\${fecha}</td>
-      </tr>\`;
-    }).join('');
-  }
+      var fecha = a.fecha_ingreso || '—';
+      var invCode = a.invitation_code || '—';
+      var fullName = (a.nombre || '') + ' ' + (a.apellido || '');
+      var qrToken = a.qr_token || a.hash_unique || '';
 
-  // ── Invitations ───────────────────────────────────────────────
-  async function loadInvitations(page) {
-    INV_PAGE = page;
-    const filter = document.getElementById('inv-filter').value;
-    const res = await fetch(\`/admin/api/invitations?page=\${page}&per_page=50&status_filter=\${filter}\`);
-    const data = await res.json();
-
-    document.getElementById('inv-total').textContent = data.total;
-    document.getElementById('inv-unused').textContent = data.unused;
-    document.getElementById('inv-used').textContent = data.used;
-
-    const tbody = document.getElementById('inv-tbody');
-    tbody.innerHTML = data.codes.map(c => {
-      const status = c.used
-        ? '<span class="status used">✓ Usado</span>'
-        : '<span class="status unused">Disponible</span>';
-      const actions = c.used
-        ? '<span style="color:var(--muted);font-size:.8rem">—</span>'
-        : \`<button class="btn btn-sm btn-danger" onclick="revokeCode(\${c.id},'\${c.code}')">Revocar</button>\`;
-      return \`<tr>
-        <td class="code-text">\${esc(c.code)} <span class="copy-btn" onclick="copyCode('\${c.code}')" title="Copiar">📋</span></td>
-        <td>\${status}</td>
-        <td>\${c.creado_en || '—'}</td>
-        <td>\${c.usado_en || '—'}</td>
-        <td>\${actions}</td>
-      </tr>\`;
-    }).join('');
-
-    renderPagination(data.pages, page);
-  }
-
-  function renderPagination(pages, current) {
-    const container = document.getElementById('inv-pagination');
-    if (pages <= 1) { container.innerHTML = ''; return; }
-    let html = '';
-    for (let i = 1; i <= pages; i++) {
-      const active = i === current ? 'background:var(--blue);color:#fff' : '';
-      html += \`<button onclick="loadInvitations(\${i})" style="padding:6px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text);cursor:pointer;\${active}">\${i}</button>\`;
+      html += '<tr>';
+      html += '<td><span class="qr-mini" onclick="showQR(\\'' + qrToken + '\\',\\'' + esc(fullName) + '\\')">📱</span></td>';
+      html += '<td>' + esc(a.nombre) + '</td>';
+      html += '<td>' + esc(a.apellido || '—') + '</td>';
+      html += '<td>' + esc(a.nro_documento || '—') + '</td>';
+      html += '<td><span class="inv-code">' + esc(invCode) + '</span></td>';
+      html += '<td>' + esc(a.invitado_por || '—') + '</td>';
+      html += '<td>' + status + '</td>';
+      html += '<td>' + fecha + '</td>';
+      html += '</tr>';
     }
-    container.innerHTML = html;
-  }
-
-  function generateCodes() { document.getElementById('gen-modal').classList.add('open'); }
-  function closeGenModal(e) { if (!e || e.target === document.getElementById('gen-modal')) document.getElementById('gen-modal').classList.remove('open'); }
-
-  async function doGenerate() {
-    const count = parseInt(document.getElementById('gen-count').value) || 1;
-    const res = await fetch(\`/admin/api/invitations/generate?count=\${count}\`, { method: 'POST' });
-    const data = await res.json();
-    const list = document.getElementById('gen-codes-list');
-    list.innerHTML = data.codes.map(c =>
-      \`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-        <span class="code-text">\${esc(c)}</span>
-        <span class="copy-btn" onclick="copyCode('\${c}')">📋</span>
-      </div>\`
-    ).join('');
-    document.getElementById('gen-result').style.display = 'block';
-    loadInvitations(INV_PAGE);
-    showToast(\`\${data.count} códigos generados\`);
-  }
-
-  async function revokeCode(id, code) {
-    if (!confirm(\`¿Revocar el código \${code}?\`)) return;
-    await fetch(\`/admin/api/invitations/\${id}/revoke\`, { method: 'POST' });
-    loadInvitations(INV_PAGE);
-    showToast(\`Código \${code} revocado\`);
-  }
-
-  function copyCode(code) {
-    navigator.clipboard.writeText(code);
-    showToast('Código copiado: ' + code);
-  }
-
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
+    tbody.innerHTML = html;
   }
 
   function showQR(hash, name) {
-    fetch(\`/admin/qr/\${hash}\`)
-      .then(r => r.blob())
-      .then(blob => {
-        document.getElementById('modal-qr-img').src = URL.createObjectURL(blob);
-        document.getElementById('modal-name').textContent = name;
-        document.getElementById('qr-modal').classList.add('open');
-      });
+    fetch('/admin/qr/' + hash).then(function(r) { return r.blob(); }).then(function(blob) {
+      document.getElementById('modal-qr-img').src = URL.createObjectURL(blob);
+      document.getElementById('modal-name').textContent = name;
+      document.getElementById('qr-modal').classList.add('open');
+    });
   }
 
-  function closeModal(e) { if (e.target === document.getElementById('qr-modal')) document.getElementById('qr-modal').classList.remove('open'); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
-  function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-  // Search + filter
   document.getElementById('search').addEventListener('input', applyFilters);
   document.getElementById('filter-status').addEventListener('change', applyFilters);
-  document.getElementById('inv-filter').addEventListener('change', () => loadInvitations(1));
 
   function applyFilters() {
-    const q = document.getElementById('search').value.toLowerCase();
-    const f = document.getElementById('filter-status').value;
-    let data = ALL_DATA;
-    if (q) data = data.filter(a =>
-      (a.nombre || '').toLowerCase().includes(q) ||
-      (a.apellido || '').toLowerCase().includes(q) ||
-      (a.nro_documento || '').toLowerCase().includes(q)
-    );
-    if (f === 'in') data = data.filter(a => a.estado_ingreso);
-    if (f === 'pending') data = data.filter(a => !a.estado_ingreso);
+    var q = document.getElementById('search').value.toLowerCase();
+    var f = document.getElementById('filter-status').value;
+    var data = ALL_DATA;
+    if (q) data = data.filter(function(a) {
+      return (a.nombre || '').toLowerCase().indexOf(q) >= 0 ||
+             (a.apellido || '').toLowerCase().indexOf(q) >= 0 ||
+             (a.nro_documento || '').toLowerCase().indexOf(q) >= 0 ||
+             (a.invitation_code || '').toLowerCase().indexOf(q) >= 0;
+    });
+    if (f === 'in') data = data.filter(function(a) { return a.estado_ingreso; });
+    if (f === 'pending') data = data.filter(function(a) { return !a.estado_ingreso; });
     renderTable(data);
   }
 
-  // Auto refresh cada 30s
+  // ── Invitations ───────────────────────────────────────────────────────
+  function loadInvitations() {
+    document.getElementById('inv-loading').style.display = 'block';
+    document.getElementById('inv-table').style.display = 'none';
+    document.getElementById('inv-no-data').style.display = 'none';
+    var filter = document.getElementById('inv-filter').value;
+    fetch('/admin/api/invitations?page=' + invPage + '&status_filter=' + filter)
+      .then(function(r) { return r.json(); }).then(function(json) {
+        document.getElementById('inv-loading').style.display = 'none';
+        document.getElementById('inv-total').textContent = json.total;
+        document.getElementById('inv-used').textContent = json.used;
+        document.getElementById('inv-unused').textContent = json.unused;
+
+        if (!json.codes.length) {
+          document.getElementById('inv-no-data').style.display = 'block';
+          document.getElementById('inv-pagination').innerHTML = '';
+          return;
+        }
+
+        document.getElementById('inv-table').style.display = 'table';
+        var html = '';
+        for (var i = 0; i < json.codes.length; i++) {
+          var c = json.codes[i];
+          var st = c.used
+            ? '<span class="status used">✓ Usado</span>'
+            : '<span class="status unused">Disponible</span>';
+          var actions;
+          if (c.used) {
+            actions = '<span style="color:var(--muted);font-size:.75rem">—</span>';
+          } else {
+            actions = '<div class="inv-actions">';
+            actions += '<button class="btn btn-sm btn-danger" onclick="revokeCode(' + c.id + ',\\'' + esc(c.code) + '\\')">Revocar</button>';
+            actions += '<button class="btn btn-sm" style="background:var(--orange)" onclick="deleteCode(' + c.id + ',\\'' + esc(c.code) + '\\')">Eliminar</button>';
+            actions += '</div>';
+          }
+          var usedBy = c.attendee_name
+            ? '<span style="color:var(--blue);font-size:.8rem">' + esc(c.attendee_name) + '</span>'
+            : '—';
+          html += '<tr>';
+          html += '<td><span class="inv-code">' + esc(c.code) + '</span><span class="copy-btn" onclick="copyCode(\\'' + esc(c.code) + '\\')" title="Copiar">📋</span></td>';
+          html += '<td>' + st + '</td>';
+          html += '<td>' + (c.creado_en || '—') + '</td>';
+          html += '<td>' + usedBy + '</td>';
+          html += '<td>' + actions + '</td>';
+          html += '</tr>';
+        }
+        document.getElementById('inv-tbody').innerHTML = html;
+
+        // Pagination
+        var pagHtml = '<button onclick="invPage=' + (json.page - 1) + ';loadInvitations()" ' + (json.page <= 1 ? 'disabled' : '') + '>← Anterior</button>';
+        pagHtml += '<span>Pág ' + json.page + ' de ' + (json.pages || 1) + '</span>';
+        pagHtml += '<button onclick="invPage=' + (json.page + 1) + ';loadInvitations()" ' + (json.page >= json.pages ? 'disabled' : '') + '>Siguiente →</button>';
+        document.getElementById('inv-pagination').innerHTML = pagHtml;
+      }).catch(function() {
+        document.getElementById('inv-loading').style.display = 'none';
+      });
+  }
+
+  function copyCode(code) {
+    navigator.clipboard.writeText(code).then(function() {
+      showToast('Código copiado: ' + code);
+    });
+  }
+
+  function revokeCode(id, code) {
+    if (!confirm('¿Revocar el código ' + code + '?')) return;
+    fetch('/admin/api/invitations/' + id + '/revoke', { method: 'POST' }).then(function(r) {
+      if (r.ok) { loadInvitations(); showToast('Código ' + code + ' revocado'); }
+      else { alert('Error al revocar'); }
+    });
+  }
+
+  function deleteCode(id, code) {
+    if (!confirm('¿Eliminar el código ' + code + '?')) return;
+    fetch('/admin/api/invitations/' + id, { method: 'DELETE' }).then(function(r) {
+      if (r.ok) { loadInvitations(); showToast('Código ' + code + ' eliminado'); }
+      else { alert('Error al eliminar'); }
+    });
+  }
+
+  // ── Generate Codes ────────────────────────────────────────────────────
+  function openGenerateModal() {
+    document.getElementById('generate-modal').classList.add('open');
+    document.getElementById('generated-codes').style.display = 'none';
+  }
+
+  function doGenerate() {
+    var count = parseInt(document.getElementById('gen-count').value) || 1;
+    fetch('/admin/api/invitations/generate?count=' + count, { method: 'POST' })
+      .then(function(r) { return r.json(); }).then(function(json) {
+        lastGeneratedCodes = json.codes;
+        var html = '';
+        for (var i = 0; i < json.codes.length; i++) {
+          html += '<div class="gen-code-item">';
+          html += '<span class="inv-code">' + esc(json.codes[i]) + '</span>';
+          html += '<span class="copy-btn" onclick="copyCode(\\'' + esc(json.codes[i]) + '\\')">📋</span>';
+          html += '</div>';
+        }
+        document.getElementById('gen-codes-list').innerHTML = html;
+        document.getElementById('generated-codes').style.display = 'block';
+        loadInvitations();
+        showToast(json.count + ' códigos generados');
+      });
+  }
+
+  function copyAllCodes() {
+    var text = lastGeneratedCodes.join('\\n');
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Todos los códigos copiados');
+    });
+  }
+
+  function shareAllWhatsApp() {
+    var text = '🎫 *Código de Invitación al Evento*\\n\\n';
+    text += 'Usá este código para registrarte:\\n\\n';
+    for (var i = 0; i < lastGeneratedCodes.length; i++) {
+      text += '▸ ' + lastGeneratedCodes[i] + '\\n';
+    }
+    text += '\\nIngresá a ' + window.location.origin + '/register para completar tu registro.';
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+
+  // ── Toast ─────────────────────────────────────────────────────────────
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, 2500);
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────
   loadData();
   setInterval(loadData, 30000);
 </script>
 </body>
 </html>"""
 
+
+@router.get("/admin", response_class=HTMLResponse)
+async def admin_dashboard(request: Request):
+    """Panel de administración con estadísticas y listado."""
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=302)
+    return ADMIN_HTML
+
+
+# ── API Endpoints ──────────────────────────────────────────────────────────
 
 @router.get("/api/admin/data")
 async def admin_data(user: AdminUser = Depends(require_user)):
@@ -471,6 +526,26 @@ async def admin_data(user: AdminUser = Depends(require_user)):
         stmt = select(Attendee).order_by(desc(Attendee.id))
         result = await session.execute(stmt)
         attendees = result.scalars().all()
+
+        # Build lookup for invitation codes
+        attendee_codes = {}
+        attendee_names = {}
+        for a in attendees:
+            if a.invitation_code_id:
+                code_stmt = select(InvitationCode).where(InvitationCode.id == a.invitation_code_id)
+                code_result = await session.execute(code_stmt)
+                code = code_result.scalar_one_or_none()
+                if code:
+                    attendee_codes[a.id] = code.code
+
+        # Build reverse lookup: for each invitation code, find who used it
+        code_attendee = {}
+        for a in attendees:
+            if a.invitation_code_id:
+                full_name = a.nombre
+                if a.apellido:
+                    full_name += " " + a.apellido
+                code_attendee[a.invitation_code_id] = full_name
 
     return {
         "total": total,
@@ -488,9 +563,11 @@ async def admin_data(user: AdminUser = Depends(require_user)):
                 "hash_unique": a.hash_unique,
                 "estado_ingreso": a.estado_ingreso,
                 "fecha_ingreso": a.fecha_ingreso.strftime("%d/%m/%Y %H:%M:%S") if a.fecha_ingreso else None,
+                "invitation_code": attendee_codes.get(a.id, ""),
             }
             for a in attendees
         ],
+        "_code_attendee": code_attendee,
     }
 
 
@@ -558,13 +635,26 @@ async def list_invitation_codes(
         result = await session.execute(stmt)
         codes = result.scalars().all()
 
+        # Get attendee names for used codes
+        attendee_names = {}
+        for c in codes:
+            if c.attendee_id:
+                att_stmt = select(Attendee).where(Attendee.id == c.attendee_id)
+                att_result = await session.execute(att_stmt)
+                att = att_result.scalar_one_or_none()
+                if att:
+                    name = att.nombre
+                    if att.apellido:
+                        name += " " + att.apellido
+                    attendee_names[c.id] = name
+
         return {
             "total": total,
             "used": used_count,
             "unused": unused_count,
             "page": page,
             "per_page": per_page,
-            "pages": (total + per_page - 1) // per_page,
+            "pages": (total + per_page - 1) // per_page if per_page > 0 else 1,
             "codes": [
                 {
                     "id": c.id,
@@ -573,6 +663,7 @@ async def list_invitation_codes(
                     "creado_en": c.creado_en.strftime("%d/%m/%Y %H:%M") if c.creado_en else None,
                     "usado_en": c.usado_en.strftime("%d/%m/%Y %H:%M") if c.usado_en else None,
                     "attendee_id": c.attendee_id,
+                    "attendee_name": attendee_names.get(c.id, ""),
                 }
                 for c in codes
             ],
@@ -594,7 +685,7 @@ async def revoke_invitation_code(code_id: int, user: AdminUser = Depends(require
             return Response(content="No se puede revocar un código ya utilizado", status_code=409, media_type="text/plain")
 
         invitation.used = True
-        invitation.usado_en = datetime.now(datetime.timezone.utc)
+        invitation.usado_en = datetime.now(timezone.utc)
         await session.commit()
 
     return {"success": True, "message": f"Código {invitation.code} revocado"}

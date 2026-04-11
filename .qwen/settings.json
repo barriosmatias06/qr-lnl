@@ -3,7 +3,8 @@
     "allow": [
       "Bash(sed *)",
       "Bash(python3 *)",
-      "Bash(cp *)"
+      "Bash(cp *)",
+      "Bash(python *)"
     ]
   },
   "$version": 3
