@@ -8,7 +8,6 @@
   <meta name="theme-color" content="#0f172a">
   <title>Control de Acceso</title>
 
-  <!-- html5-qrcode: escáner de QR en el browser sin dependencias nativas -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <style>
@@ -37,6 +36,58 @@
       flex-direction: column;
       -webkit-tap-highlight-color: transparent;
     }
+
+    /* ── Landing (pantalla con 2 botones) ───────────────────────── */
+    #landing {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      gap: 20px;
+      z-index: 400;
+      background: var(--bg);
+    }
+
+    #landing.gone { display: none; }
+
+    .landing-emoji  { font-size: 4rem; margin-bottom: 12px; }
+    .landing-title { font-size: 1.8rem; font-weight: 900; text-align: center; margin-bottom: 4px; }
+    .landing-sub   { color: var(--muted); text-align: center; font-size: 0.95rem; margin-bottom: 24px; }
+
+    .landing-btn {
+      width: 100%; max-width: 300px;
+      padding: 18px 24px;
+      border: none;
+      border-radius: 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: transform 0.1s, opacity 0.15s;
+    }
+
+    .landing-btn:active { transform: scale(0.97); }
+
+    .btn-escanear {
+      background: var(--blue);
+      color: #fff;
+    }
+
+    .btn-admin-land {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-admin-land:hover { border-color: var(--blue); }
 
     /* ── Barra de estadísticas ──────────────────────────────────── */
     #stats-bar {
@@ -88,7 +139,6 @@
       color: #94a3b8;
     }
 
-    /* Contenedor del visor; html5-qrcode inyecta su propio CSS */
     #reader {
       width: 100%;
       max-width: 380px;
@@ -97,9 +147,8 @@
       border: 2px solid var(--border);
     }
 
-    /* Forzar que el visor de html5-qrcode no rompa el layout */
     #reader video { width: 100% !important; }
-    #reader img   { display: none !important; }  /* ocultar icono de upload */
+    #reader img   { display: none !important; }
 
     /* Indicador de estado */
     #scan-status {
@@ -122,7 +171,7 @@
       50%       { opacity: 0.2; }
     }
 
-    /* ── Input manual (fallback sin cámara) ─────────────────────── */
+    /* ── Input manual ───────────────────────────────────────────── */
     #manual-wrap {
       width: 100%;
       max-width: 380px;
@@ -179,42 +228,54 @@
 
     .btn-primary:active { opacity: 0.8; }
 
-    /* ── Pantalla de permiso de cámara ──────────────────────────── */
-    #perm-screen {
+    /* ── Botón volver al inicio ─────────────────────────────────── */
+    .btn-back {
       position: fixed;
-      inset: 0;
-      background: var(--bg);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 32px;
-      text-align: center;
-      z-index: 300;
-    }
-
-    #perm-screen.gone { display: none; }
-
-    .perm-emoji  { font-size: 4rem; margin-bottom: 20px; }
-    .perm-title  { font-size: 1.6rem; font-weight: 800; margin-bottom: 10px; }
-    .perm-desc   { color: #94a3b8; line-height: 1.6; margin-bottom: 28px; font-size: 0.95rem; }
-
-    .btn-cta {
-      width: 100%; max-width: 320px;
-      background: var(--blue);
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      padding: 16px 28px;
-      font-size: 1.05rem;
-      font-weight: 700;
+      top: 12px;
+      left: 12px;
+      z-index: 500;
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 7px 14px;
+      font-size: 0.75rem;
+      font-weight: 600;
       cursor: pointer;
-      transition: transform 0.1s;
+      display: none;
+      transition: color 0.15s, border-color 0.15s;
     }
 
-    .btn-cta:active { transform: scale(0.97); }
+    .btn-back:hover { color: var(--text); border-color: var(--blue); }
+    .btn-back.visible { display: flex; }
 
-    /* ── Overlay de resultado (pantalla completa) ────────────────── */
+    /* ── Botón Administrador (esquina) ──────────────────────────── */
+    .btn-admin {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 500;
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 7px 14px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      transition: color 0.15s, border-color 0.15s;
+      cursor: pointer;
+    }
+
+    .btn-admin:hover { color: var(--text); border-color: var(--blue); }
+    .btn-admin.visible { display: flex; }
+
+    /* ── Overlay de resultado ───────────────────────────────────── */
     #result-overlay {
       position: fixed;
       inset: 0;
@@ -268,7 +329,6 @@
       opacity: 0.55;
     }
 
-    /* Spinner de carga */
     .spinner {
       width: 52px; height: 52px;
       border: 4px solid rgba(255,255,255,0.2);
@@ -279,48 +339,24 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Botón Administrador (esquina) ───────────────────────────── */
-    .btn-admin {
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      z-index: 500;
-      background: rgba(30, 41, 59, 0.85);
-      backdrop-filter: blur(8px);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--muted);
-      padding: 7px 14px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-decoration: none;
-      display: none;
-      align-items: center;
-      gap: 5px;
-      transition: color 0.15s, border-color 0.15s;
-      cursor: pointer;
-    }
-
-    .btn-admin:hover { color: var(--text); border-color: var(--blue); }
-    .btn-admin.visible { display: flex; }
   </style>
 </head>
 <body>
 
-<!-- ── Botón Administrador (esquina superior derecha) ────────────────────── -->
-<a href="/admin" class="btn-admin" id="btn-admin">🛡️ Admin</a>
-
-<!-- ── Pantalla inicial: pedir permiso de cámara ─────────────────────────── -->
-<div id="perm-screen">
-  <div class="perm-emoji">📷</div>
-  <h1 class="perm-title">Control de Acceso</h1>
-  <p class="perm-desc">
-    Esta app necesita acceso a tu cámara para escanear los
-    códigos QR de los asistentes al evento.
-  </p>
-  <button class="btn-cta" onclick="startScanner()">Activar Cámara</button>
+<!-- ── Landing: ESCANEAR + ADMIN ─────────────────────────────────────────── -->
+<div id="landing">
+  <div class="landing-emoji">🎫</div>
+  <h1 class="landing-title">Control de Acceso</h1>
+  <p class="landing-sub">Seleccioná una opción</p>
+  <button class="landing-btn btn-escanear" onclick="goScan()">📷 Escanear</button>
+  <a href="/admin" class="landing-btn btn-admin-land">🛡️ Administrador</a>
 </div>
+
+<!-- ── Botón volver ──────────────────────────────────────────────────────── -->
+<button class="btn-back" id="btn-back" onclick="goHome()">← Inicio</button>
+
+<!-- ── Botón Admin (esquina superior derecha) ────────────────────────────── -->
+<a href="/admin" class="btn-admin" id="btn-admin">🛡️ Admin</a>
 
 <!-- ── Barra de estadísticas ─────────────────────────────────────────────── -->
 <div id="stats-bar">
@@ -347,7 +383,6 @@
     <span>Escáner activo</span>
   </div>
 
-  <!-- Fallback: ingreso manual del hash -->
   <div id="manual-wrap">
     <button class="btn-ghost" onclick="toggleManual()">✏️ Ingresar código manual</button>
     <div id="manual-row">
@@ -364,7 +399,7 @@
   </div>
 </div>
 
-<!-- ── Overlay de resultado (fullscreen) ─────────────────────────────────── -->
+<!-- ── Overlay de resultado ─────────────────────────────────────────────── -->
 <div id="result-overlay">
   <div id="res-icon"   class="res-icon"></div>
   <div id="res-title"  class="res-title"></div>
@@ -375,102 +410,91 @@
 
 
 <script>
-  // ──────────────────────────────────────────────────────────────
-  // Utilidades DOM — deben ir PRIMERO para que todo lo demás pueda usarlas
-  // ──────────────────────────────────────────────────────────────
   const qs   = sel => document.querySelector(sel);
-  const show = (id, d = 'flex') => { document.getElementById(id).style.display = d; };
-  const hide = id => { document.getElementById(id).classList.add('gone'); };
-
-  // ──────────────────────────────────────────────────────────────
-  // Estado global
-  // ──────────────────────────────────────────────────────────────
   let scanner      = null;
   let isProcessing = false;
   let lastHash     = '';
   let cdInterval   = null;
 
-  const RESULT_MS  = 3500;   // ms que se muestra el overlay de resultado
-  const COOLDOWN_MS = 8000;  // ms mínimos entre el mismo QR
+  const RESULT_MS   = 3500;
+  const COOLDOWN_MS = 8000;
 
-  // ──────────────────────────────────────────────────────────────
-  // Inicialización: procesar ?id=HASH si viene en la URL
-  // (para el caso en que la cámara nativa del teléfono escanea el QR)
-  // ──────────────────────────────────────────────────────────────
+  // ── Si viene ?id=HASH en URL, ir directo al scan ──────────────
   window.addEventListener('load', () => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
     if (id) {
-      hide('perm-screen');
-      show('stats-bar');
-      show('scanner-wrap');
-      document.getElementById('btn-admin').classList.add('visible');
+      document.getElementById('landing').classList.add('gone');
+      activateScanner();
       showLoading();
       callCheck(id);
     }
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Arrancar el escáner — usa Html5Qrcode (bajo nivel) para abrir
-  // la cámara directamente sin pantallas intermedias
-  // ──────────────────────────────────────────────────────────────
-  function startScanner() {
-    hide('perm-screen');
-    show('stats-bar', 'flex');
-    show('scanner-wrap', 'flex');
+  // ── Ir a escanear ─────────────────────────────────────────────
+  function goScan() {
+    document.getElementById('landing').classList.add('gone');
+    activateScanner();
+  }
+
+  // ── Volver al inicio ──────────────────────────────────────────
+  function goHome() {
+    if (scanner) {
+      scanner.stop().catch(() => {});
+      scanner = null;
+    }
+    isProcessing = false;
+    document.getElementById('landing').classList.remove('gone');
+    document.getElementById('stats-bar').style.display = 'none';
+    document.getElementById('scanner-wrap').style.display = 'none';
+    document.getElementById('btn-back').classList.remove('visible');
+    document.getElementById('btn-admin').classList.remove('visible');
+  }
+
+  // ── Activar scanner (cámara) ──────────────────────────────────
+  function activateScanner() {
+    document.getElementById('stats-bar').style.display = 'flex';
+    document.getElementById('scanner-wrap').style.display = 'flex';
+    document.getElementById('btn-back').classList.add('visible');
     document.getElementById('btn-admin').classList.add('visible');
     refreshStats();
 
     scanner = new Html5Qrcode('reader');
-
     scanner.start(
-      { facingMode: 'environment' },   // cámara trasera
+      { facingMode: 'environment' },
       { fps: 10, qrbox: { width: 260, height: 260 } },
       onScan,
-      () => {}   // ignorar errores de frame sin QR
+      () => {}
     ).catch(err => {
       qs('#scan-status span').textContent = 'Sin acceso a la cámara: ' + err;
     });
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Callback del escáner
-  // ──────────────────────────────────────────────────────────────
+  // ── Callback scan ─────────────────────────────────────────────
   function onScan(text) {
     if (isProcessing) return;
-
     const hash = extractHash(text);
     if (!hash) return;
-
-    // Anti-doble-scan: ignorar el mismo hash por COOLDOWN_MS
     if (hash === lastHash) return;
     lastHash = hash;
     setTimeout(() => { lastHash = ''; }, COOLDOWN_MS);
-
     showLoading();
     callCheck(hash);
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Extracción del hash desde el texto del QR.
-  // Acepta tanto una URL completa (?id=HASH) como el hash solo.
-  // ──────────────────────────────────────────────────────────────
+  // ── Extraer hash ──────────────────────────────────────────────
   function extractHash(text) {
     text = (text || '').trim();
     try {
       const url = new URL(text);
       const id  = url.searchParams.get('id');
       if (id && id.length >= 8) return id.toUpperCase();
-    } catch (_) { /* no es URL */ }
-
-    // Aceptar texto que sea solo hex de 8-32 chars
+    } catch (_) {}
     if (/^[A-Fa-f0-9]{8,32}$/.test(text)) return text.toUpperCase();
     return null;
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // API — relative paths (mismo dominio, sin CORS proxy)
-  // ──────────────────────────────────────────────────────────────
+  // ── API ───────────────────────────────────────────────────────
   async function apiRequest(url) {
     const resp = await fetch(url);
     if (!resp.ok) {
@@ -484,7 +508,7 @@
     isProcessing = true;
     apiRequest(`/api/check?hash=${encodeURIComponent(hash)}`)
       .then(onResult)
-      .catch(err => { isProcessing = false; onNetworkError(err.message || err); });
+      .catch(err => { isProcessing = false; onNetworkError(String(err)); });
   }
 
   function onResult(r) {
@@ -515,12 +539,10 @@
 
   function onNetworkError(err) {
     isProcessing = false;
-    showResult('error', '📡', 'Sin conexión', String(err), 'Verificar señal y reintentar');
+    showResult('error', '📡', 'Sin conexión', err, 'Verificar señal y reintentar');
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Overlay de resultado
-  // ──────────────────────────────────────────────────────────────
+  // ── Overlay ───────────────────────────────────────────────────
   function showLoading() {
     const o = qs('#result-overlay');
     o.className = 'show loading';
@@ -534,13 +556,10 @@
   function showResult(type, icon, title, name, detail) {
     const o = qs('#result-overlay');
     o.className = `show ${type}`;
-
     qs('#res-icon').textContent   = icon;
     qs('#res-title').textContent  = title;
     qs('#res-name').textContent   = name;
     qs('#res-detail').textContent = detail;
-
-    // Cuenta regresiva visual
     clearInterval(cdInterval);
     let secs = Math.ceil(RESULT_MS / 1000);
     qs('#res-cd').textContent = `Continúa en ${secs}s`;
@@ -549,20 +568,16 @@
       qs('#res-cd').textContent = secs > 0 ? `Continúa en ${secs}s` : '';
       if (secs <= 0) clearInterval(cdInterval);
     }, 1000);
-
     setTimeout(() => {
       o.className = '';
       clearInterval(cdInterval);
     }, RESULT_MS);
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Estadísticas (se refrescan después de cada scan)
-  // ──────────────────────────────────────────────────────────────
+  // ── Stats ─────────────────────────────────────────────────────
   function refreshStats() {
     apiRequest('/api/stats')
       .then(s => {
-        if (!s || s.status === 'ERROR') return;
         qs('#s-in').textContent    = s.ingresaron;
         qs('#s-pend').textContent  = s.pendientes;
         qs('#s-total').textContent = s.total;
@@ -570,9 +585,7 @@
       .catch(() => {});
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Input manual (fallback si la cámara no funciona)
-  // ──────────────────────────────────────────────────────────────
+  // ── Manual ────────────────────────────────────────────────────
   function toggleManual() {
     const row = qs('#manual-row');
     row.classList.toggle('open');
@@ -592,16 +605,11 @@
     if (e.key === 'Enter') manualCheck();
   });
 
-  // ──────────────────────────────────────────────────────────────
-  // Vibración
-  // ──────────────────────────────────────────────────────────────
+  // ── Audio / Vibración ─────────────────────────────────────────
   function buzz(pattern) {
     if ('vibrate' in navigator) navigator.vibrate(pattern);
   }
 
-  // ──────────────────────────────────────────────────────────────
-  // Audio feedback (Web Audio API)
-  // ──────────────────────────────────────────────────────────────
   let audioCtx = null;
 
   function beep(freq, dur, type) {
@@ -617,9 +625,8 @@
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
       osc.start(audioCtx.currentTime);
       osc.stop(audioCtx.currentTime + dur);
-    } catch (_) { /* sin audio */ }
+    } catch (_) {}
   }
-
 </script>
 </body>
 </html>
