@@ -1,5 +1,0 @@
-[http]
-  [http.redirections]
-    [http.redirections.entryPoint]
-      to = "websecure"
-      scheme = "https"

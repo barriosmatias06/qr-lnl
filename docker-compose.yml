@@ -2,7 +2,7 @@ services:
 
   # ── Traefik (Reverse Proxy + Let's Encrypt) ────────────────────────
   traefik:
-    image: traefik:v3.0
+    image: traefik:v2.11
     container_name: qr-traefik
     restart: unless-stopped
     ports:
@@ -20,8 +20,8 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-barriosmn06@gmail.com}"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
     networks:
       - app-network
 
@@ -40,7 +40,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.app.rule=Host(`dominic.com.ar`)"
       - "traefik.http.routers.app.entrypoints=websecure"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       - "traefik.http.services.app.loadbalancer.server.port=8000"
