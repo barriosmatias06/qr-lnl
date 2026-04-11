@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -152,8 +152,12 @@ async def serve_qr_image(filename: str):
 # ── Frontend (SPA) ─────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
-async def serve_index():
-    """Sirve el HTML del scanner."""
+async def serve_index(request: Request):
+    """Sirve el HTML del scanner o redirige a admin según subdominio."""
+    host = request.headers.get("host", "")
+    if host.startswith("admin."):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin")
     index_path = Path(__file__).parent.parent / "frontend" / "index.html"
     if not index_path.is_file():
         raise HTTPException(status_code=404, detail="Frontend no encontrado")
