@@ -62,103 +62,25 @@ else
 fi
 echo "  OK"
 
-# ── 4. QR generation ──────────────────────────────────────────────
+# ── 4. SSL temp cert + nginx configs ──────────────────────────────
 echo ""
-echo "[4/8] QRs..."
-PYTHON=python3
-if ! $PYTHON -c "import qrcode" &>/dev/null; then
-    echo "  Instalando dependencias..."
-    apt-get install -y -qq python3-pip python3-venv
-    python3 -m venv "$APP_DIR/.venv"
-    "$APP_DIR/.venv/bin/pip" install --quiet qrcode[pil] Pillow tqdm
-    PYTHON="$APP_DIR/.venv/bin/python3"
-fi
-$PYTHON generate_qr.py --url "https://${DOMAIN}"
-QR_COUNT=$(find qr_codes -name '*.png' 2>/dev/null | wc -l)
-echo "  OK $QR_COUNT QRs"
-
-# ── 5. Generate temporary self-signed cert + nginx configs ─────────
-echo ""
-echo "[5/8] SSL temp + nginx..."
+echo "[4/8] SSL temp + nginx..."
 mkdir -p "$APP_DIR/nginx/certbot/conf"
 mkdir -p "$APP_DIR/nginx/certbot/www"
 
-# Write nginx configs
-# default.conf: HTTP proxy + acme-challenge
-cat > "$APP_DIR/nginx/default.conf" << NGINXEOF
-server {
-    listen 80;
-    server_name _;
-
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-
-    location / {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-NGINXEOF
-
-# ssl.conf: Uses self-signed cert
-cat > "$APP_DIR/nginx/ssl.conf" << SLEOF
-server {
-    listen 443 ssl;
-    server_name ${DOMAIN};
-
-    ssl_certificate     /etc/nginx/ssl-temp/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl-temp/privkey.pem;
-
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;
-    ssl_prefer_server_ciphers on;
-
-    location /api/ {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_connect_timeout 30s;
-        proxy_read_timeout    30s;
-    }
-
-    location /qr/ {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host \$host;
-        proxy_cache_valid 200 60m;
-        expires 7d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    location / {
-        proxy_pass http://backend:8000;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-}
-SLEOF
-
 # Ensure self-signed certs exist before compose up
-# (needed for the volume mount in docker-compose.yml)
 if [ ! -f "$APP_DIR/nginx/ssl-fullchain.pem" ]; then
     echo "  Generando certificado temporal..."
     openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
         -keyout "$APP_DIR/nginx/ssl-privkey.pem" \
         -out "$APP_DIR/nginx/ssl-fullchain.pem" \
         -subj "/CN=${DOMAIN}" 2>/dev/null
-    echo "  OK cert temporal generado"
+    echo "  OK cert generado"
 fi
 
-# ── 6. Start stack ────────────────────────────────────────────────
+# ── 5. Start stack ────────────────────────────────────────────────
 echo ""
-echo "[6/8] Docker compose..."
+echo "[5/7] Docker compose..."
 cd "$APP_DIR"
 docker compose down 2>/dev/null || true
 docker compose up -d --build
@@ -194,21 +116,9 @@ else
     docker compose logs nginx 2>/dev/null | tail -10
 fi
 
-# ── 7. Seed data ──────────────────────────────────────────────────
+# ── 6. SSL Certificate ───────────────────────────────────────────
 echo ""
-echo "[7/8] Importando asistentes..."
-sleep 5
-SEED=$(curl -s -X POST http://127.0.0.1:8000/api/seed 2>/dev/null || echo "no disponible")
-echo "  Seed: $SEED"
-
-STATS=$(curl -s http://127.0.0.1:8000/api/stats 2>/dev/null || echo "no disponible")
-echo "  Stats: $STATS"
-
-# ── 8. Get real Let's Encrypt cert ────────────────────────────────
-echo ""
-echo "==============================="
-echo "  Let's Encrypt SSL..."
-echo "==============================="
+echo "[6/7] Let's Encrypt SSL..."
 
 # certbot container already running, just exec the command
 docker compose run --rm certbot certonly \
@@ -255,13 +165,9 @@ rm -f "$APP_DIR/nginx/ssl-privkey.pem" "$APP_DIR/nginx/ssl-fullchain.pem" 2>/dev
 
 echo ""
 echo "==============================="
-echo "  DEPLOY COMPLETADO"
-echo "  https://${DOMAIN}"
+echo "  Deploy QR - $DOMAIN"
 echo "==============================="
 echo ""
-echo "  Comandos utiles:"
-echo "    cd $APP_DIR"
-echo "    docker compose logs -f backend"
-echo "    docker compose logs -f nginx"
-echo "    docker compose exec db psql -U evento -d evento_db"
-echo ""
+echo "  Registro: https://${DOMAIN}/register"
+echo "  Scanner:  https://${DOMAIN}"
+echo "==============================="

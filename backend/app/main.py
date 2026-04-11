@@ -20,6 +20,9 @@ from app.database import async_engine, async_session, init_db
 from app.models import Attendee
 from app.schemas import CheckResponse, StatsResponse, StatusType
 
+# Import register routes (must be after app creation)
+from app import register  # noqa: F401
+
 
 # ── Configuración ──────────────────────────────────────────────────────────
 

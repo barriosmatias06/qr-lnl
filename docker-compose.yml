@@ -18,8 +18,6 @@ services:
       DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-evento}:${POSTGRES_PASSWORD:-evento_pass}@db:5432/${POSTGRES_DB:-evento_db}"
       QR_IMAGES_DIR: /app/qr_codes
     volumes:
-      - ./qr_codes:/app/qr_codes:ro
-      - ./asistentes_import.csv:/app/data/asistentes_import.csv:ro
       - ./frontend:/app/frontend:ro
     depends_on:
       db:

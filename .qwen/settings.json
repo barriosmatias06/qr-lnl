@@ -17,7 +17,9 @@
       "Bash(ls *)",
       "Bash(groups)",
       "Bash(systemctl *)",
-      "Bash(sudo *)"
+      "Bash(sudo *)",
+      "Bash(ssh *)",
+      "Bash(python3 *)"
     ]
   },
   "$version": 3

@@ -2,9 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema mínimas
+# Instalar dependencias del sistema + fuentes
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements e instalar
