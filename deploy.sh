@@ -59,13 +59,15 @@ echo "  OK"
 # ── 4. QR generation ──────────────────────────────────────────────
 echo ""
 echo "[4/8] QRs..."
-if ! python3 -c "import qrcode" &>/dev/null; then
+PYTHON=python3
+if ! $PYTHON -c "import qrcode" &>/dev/null; then
     echo "  Instalando dependencias..."
     apt-get install -y -qq python3-pip python3-venv
     python3 -m venv "$APP_DIR/.venv"
     "$APP_DIR/.venv/bin/pip" install --quiet qrcode[pil] Pillow tqdm
+    PYTHON="$APP_DIR/.venv/bin/python3"
 fi
-python3 generate_qr.py --url "https://${DOMAIN}"
+$PYTHON generate_qr.py --url "https://${DOMAIN}"
 QR_COUNT=$(find qr_codes -name '*.png' 2>/dev/null | wc -l)
 echo "  OK $QR_COUNT QRs"
 
