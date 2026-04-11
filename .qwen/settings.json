@@ -9,7 +9,15 @@
       "Bash(git remote *)",
       "Bash(git push *)",
       "Bash(git reset *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "Bash(docker *)",
+      "Bash(docker compose version)",
+      "Bash(docker compose ps)",
+      "Bash(hostname)",
+      "Bash(ls *)",
+      "Bash(groups)",
+      "Bash(systemctl *)",
+      "Bash(sudo *)"
     ]
   },
   "$version": 3

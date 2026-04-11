@@ -1,21 +1,9 @@
 # ═══════════════════════════════════════════════════════════════════
-#  docker-compose.yml — Control de Acceso QR (Evento 1800 personas)
-#
-#  Servicios:
-#    - backend:  FastAPI + Uvicorn (Python 3.12)
-#    - db:       PostgreSQL 16
-#    - nginx:    Reverse proxy + SSL
-#    - certbot:  Let's Encrypt (certificados automáticos)
-#
-#  Uso:
-#    1. Copiar .env.example a .env y ajustar variables
-#    2. docker compose up -d
-#    3. bash init-letsencrypt.sh   (para HTTPS)
+#  docker-compose.yml — Control de Acceso QR
 # ═══════════════════════════════════════════════════════════════════
 
 services:
 
-  # ── Backend (FastAPI) ────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -30,8 +18,8 @@ services:
       DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-evento}:${POSTGRES_PASSWORD:-evento_pass}@db:5432/${POSTGRES_DB:-evento_db}"
       QR_IMAGES_DIR: /app/qr_codes
     volumes:
-      - ./qr_codes:/app/qr_codes:ro           # Imágenes QR (read-only)
-      - ./asistentes_import.csv:/app/data/asistentes_import.csv:ro  # CSV para seed
+      - ./qr_codes:/app/qr_codes:ro
+      - ./asistentes_import.csv:/app/data/asistentes_import.csv:ro
     depends_on:
       db:
         condition: service_healthy
@@ -44,7 +32,6 @@ services:
       retries: 3
       start_period: 10s
 
-  # ── PostgreSQL ───────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     container_name: qr-db
@@ -55,8 +42,6 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-evento_pass}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"   # Acceso local para administración (opcional)
     networks:
       - app-network
     healthcheck:
@@ -66,7 +51,6 @@ services:
       retries: 5
       start_period: 10s
 
-  # ── Nginx (Reverse Proxy) ────────────────────────────────────────────
   nginx:
     image: nginx:1.25-alpine
     container_name: qr-nginx
@@ -84,7 +68,6 @@ services:
     networks:
       - app-network
 
-  # ── Certbot (Let's Encrypt) ──────────────────────────────────────────
   certbot:
     image: certbot/certbot:latest
     container_name: qr-certbot

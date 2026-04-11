@@ -1,9 +1,7 @@
-# ── HTTPS + Reverse Proxy ─────────────────────────────────────────────
 server {
     listen 443 ssl http2;
     server_name ${DOMAIN};
 
-    # SSL Certificates (mounted from Certbot)
     ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
 
@@ -11,27 +9,20 @@ server {
     ssl_ciphers         HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
-    # Security headers
     add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
     add_header X-Content-Type-Options nosniff;
     add_header X-Frame-Options DENY;
-    add_header X-XSS-Protection "1; mode=block";
 
-    # ── Backend API ──────────────────────────────────────────────
     location /api/ {
         proxy_pass http://backend:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Timeouts para conexiones lentas (4G en eventos)
         proxy_connect_timeout 30s;
         proxy_read_timeout    30s;
-        proxy_send_timeout    30s;
     }
 
-    # ── QR Images ────────────────────────────────────────────────
     location /qr/ {
         proxy_pass http://backend:8000;
         proxy_set_header Host $host;
@@ -40,7 +31,6 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # ── Frontend (SPA) ───────────────────────────────────────────
     location / {
         proxy_pass http://backend:8000;
         proxy_set_header Host $host;
