@@ -7,10 +7,10 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, Cookie
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from sqlalchemy import select
 
@@ -25,17 +25,15 @@ SECRET_KEY = os.getenv("ADMIN_JWT_SECRET", "change-me-to-a-random-secret-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 8  # 8 horas
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
 
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain)
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:

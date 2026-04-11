@@ -38,10 +38,8 @@ async def init_db():
 
 def _seed_admin_users(connection):
     """Crear usuarios admin si la tabla está vacía (ejecutado sincrónicamente)."""
+    import bcrypt
     from sqlalchemy import text
-    from passlib.context import CryptContext
-
-    pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     # Contraseñas seguras para los 8 usuarios admin
     ADMIN_PASSWORDS = {
@@ -61,7 +59,7 @@ def _seed_admin_users(connection):
         return  # Ya existen usuarios admin
 
     for username, password in ADMIN_PASSWORDS.items():
-        hashed = pwd.hash(password)
+        hashed = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
         connection.execute(
             text("INSERT INTO admin_users (username, password_hash, activo, creado_en) VALUES (:u, :p, TRUE, NOW())"),
             {"u": username, "p": hashed},
