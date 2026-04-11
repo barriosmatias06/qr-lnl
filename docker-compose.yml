@@ -54,6 +54,12 @@ services:
       - "traefik.http.routers.empleados.tls.certresolver=letsencrypt"
       - "traefik.http.routers.empleados.service=empleados-svc"
       - "traefik.http.services.empleados-svc.loadbalancer.server.port=8000"
+      # Admin subdomain: dashboard
+      - "traefik.http.routers.admin.rule=Host(`admin.dominic.com.ar`)"
+      - "traefik.http.routers.admin.entrypoints=websecure"
+      - "traefik.http.routers.admin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.admin.service=admin-svc"
+      - "traefik.http.services.admin-svc.loadbalancer.server.port=8000"
     networks:
       - app-network
     healthcheck:
