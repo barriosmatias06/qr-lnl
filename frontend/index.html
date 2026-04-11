@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f172a">
+  <title>Control de Acceso</title>
+
+  <!-- html5-qrcode: escáner de QR en el browser sin dependencias nativas -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    /* ── Variables ──────────────────────────────────────────────── */
+    :root {
+      --bg:      #0f172a;
+      --card:    #1e293b;
+      --border:  #334155;
+      --muted:   #64748b;
+      --text:    #f1f5f9;
+      --green:   #22c55e;
+      --orange:  #f97316;
+      --red:     #ef4444;
+      --blue:    #3b82f6;
+    }
+
+    /* ── Reset / Base ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Barra de estadísticas ──────────────────────────────────── */
+    #stats-bar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      display: none;
+      justify-content: space-around;
+      flex-shrink: 0;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .stat-num {
+      font-size: 1.6rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .stat.s-in     .stat-num { color: var(--green); }
+    .stat.s-pend   .stat-num { color: var(--orange); }
+    .stat.s-total  .stat-num { color: var(--blue); }
+
+    /* ── Área del scanner ───────────────────────────────────────── */
+    #scanner-wrap {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px;
+      gap: 12px;
+    }
+
+    #scanner-wrap h2 {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+
+    /* Contenedor del visor; html5-qrcode inyecta su propio CSS */
+    #reader {
+      width: 100%;
+      max-width: 380px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid var(--border);
+    }
+
+    /* Forzar que el visor de html5-qrcode no rompa el layout */
+    #reader video { width: 100% !important; }
+    #reader img   { display: none !important; }  /* ocultar icono de upload */
+
+    /* Indicador de estado */
+    #scan-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: blink 2s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    /* ── Input manual (fallback sin cámara) ─────────────────────── */
+    #manual-wrap {
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .btn-ghost {
+      width: 100%;
+      padding: 9px 16px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.15s;
+    }
+
+    .btn-ghost:hover { border-color: var(--blue); color: var(--text); }
+
+    #manual-row {
+      display: none;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    #manual-row.open { display: flex; }
+
+    #hash-input {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid #475569;
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    #hash-input:focus { outline: none; border-color: var(--blue); }
+
+    .btn-primary {
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .btn-primary:active { opacity: 0.8; }
+
+    /* ── Pantalla de permiso de cámara ──────────────────────────── */
+    #perm-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      text-align: center;
+      z-index: 300;
+    }
+
+    #perm-screen.gone { display: none; }
+
+    .perm-emoji  { font-size: 4rem; margin-bottom: 20px; }
+    .perm-title  { font-size: 1.6rem; font-weight: 800; margin-bottom: 10px; }
+    .perm-desc   { color: #94a3b8; line-height: 1.6; margin-bottom: 28px; font-size: 0.95rem; }
+
+    .btn-cta {
+      width: 100%; max-width: 320px;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 16px 28px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    .btn-cta:active { transform: scale(0.97); }
+
+    /* ── Overlay de resultado (pantalla completa) ────────────────── */
+    #result-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
+    }
+
+    #result-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    #result-overlay.success { background: rgba(21, 128, 61, 0.97); }
+    #result-overlay.warning { background: rgba(154, 52, 18, 0.97); }
+    #result-overlay.error   { background: rgba(153, 27, 27, 0.97); }
+    #result-overlay.loading { background: rgba(15, 23, 42, 0.96); }
+
+    .res-icon  { font-size: 5.5rem; margin-bottom: 16px; line-height: 1; }
+
+    .res-title {
+      font-size: 2.2rem;
+      font-weight: 900;
+      text-align: center;
+      margin-bottom: 10px;
+      letter-spacing: -0.02em;
+    }
+
+    .res-name {
+      font-size: 1.3rem;
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .res-detail {
+      font-size: 0.9rem;
+      text-align: center;
+      opacity: 0.8;
+    }
+
+    .res-cd {
+      margin-top: 24px;
+      font-size: 0.8rem;
+      opacity: 0.55;
+    }
+
+    /* Spinner de carga */
+    .spinner {
+      width: 52px; height: 52px;
+      border: 4px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ── Pantalla inicial: pedir permiso de cámara ─────────────────────────── -->
+<div id="perm-screen">
+  <div class="perm-emoji">📷</div>
+  <h1 class="perm-title">Control de Acceso</h1>
+  <p class="perm-desc">
+    Esta app necesita acceso a tu cámara para escanear los
+    códigos QR de los asistentes al evento.
+  </p>
+  <button class="btn-cta" onclick="startScanner()">Activar Cámara</button>
+</div>
+
+<!-- ── Barra de estadísticas ─────────────────────────────────────────────── -->
+<div id="stats-bar">
+  <div class="stat s-in">
+    <span class="stat-num" id="s-in">—</span>
+    <span class="stat-label">Ingresaron</span>
+  </div>
+  <div class="stat s-pend">
+    <span class="stat-num" id="s-pend">—</span>
+    <span class="stat-label">Pendientes</span>
+  </div>
+  <div class="stat s-total">
+    <span class="stat-num" id="s-total">—</span>
+    <span class="stat-label">Total</span>
+  </div>
+</div>
+
+<!-- ── Área de scanner ────────────────────────────────────────────────────── -->
+<div id="scanner-wrap">
+  <h2>Apuntá la cámara al código QR</h2>
+  <div id="reader"></div>
+  <div id="scan-status">
+    <div class="dot"></div>
+    <span>Escáner activo</span>
+  </div>
+
+  <!-- Fallback: ingreso manual del hash -->
+  <div id="manual-wrap">
+    <button class="btn-ghost" onclick="toggleManual()">✏️ Ingresar código manual</button>
+    <div id="manual-row">
+      <input
+        type="text"
+        id="hash-input"
+        placeholder="Código del QR"
+        maxlength="32"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button class="btn-primary" onclick="manualCheck()">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Overlay de resultado (fullscreen) ─────────────────────────────────── -->
+<div id="result-overlay">
+  <div id="res-icon"   class="res-icon"></div>
+  <div id="res-title"  class="res-title"></div>
+  <div id="res-name"   class="res-name"></div>
+  <div id="res-detail" class="res-detail"></div>
+  <div id="res-cd"     class="res-cd"></div>
+</div>
+
+
+<script>
+  // ──────────────────────────────────────────────────────────────
+  // Utilidades DOM — deben ir PRIMERO para que todo lo demás pueda usarlas
+  // ──────────────────────────────────────────────────────────────
+  const qs   = sel => document.querySelector(sel);
+  const show = (id, d = 'flex') => { document.getElementById(id).style.display = d; };
+  const hide = id => { document.getElementById(id).classList.add('gone'); };
+
+  // ──────────────────────────────────────────────────────────────
+  // Estado global
+  // ──────────────────────────────────────────────────────────────
+  let scanner      = null;
+  let isProcessing = false;
+  let lastHash     = '';
+  let cdInterval   = null;
+
+  const RESULT_MS  = 3500;   // ms que se muestra el overlay de resultado
+  const COOLDOWN_MS = 8000;  // ms mínimos entre el mismo QR
+
+  // ──────────────────────────────────────────────────────────────
+  // Inicialización: procesar ?id=HASH si viene en la URL
+  // (para el caso en que la cámara nativa del teléfono escanea el QR)
+  // ──────────────────────────────────────────────────────────────
+  window.addEventListener('load', () => {
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get('id');
+    if (id) {
+      hide('perm-screen');
+      show('stats-bar');
+      show('scanner-wrap');
+      showLoading();
+      callCheck(id);
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Arrancar el escáner — usa Html5Qrcode (bajo nivel) para abrir
+  // la cámara directamente sin pantallas intermedias
+  // ──────────────────────────────────────────────────────────────
+  function startScanner() {
+    hide('perm-screen');
+    show('stats-bar', 'flex');
+    show('scanner-wrap', 'flex');
+    refreshStats();
+
+    scanner = new Html5Qrcode('reader');
+
+    scanner.start(
+      { facingMode: 'environment' },   // cámara trasera
+      { fps: 10, qrbox: { width: 260, height: 260 } },
+      onScan,
+      () => {}   // ignorar errores de frame sin QR
+    ).catch(err => {
+      qs('#scan-status span').textContent = 'Sin acceso a la cámara: ' + err;
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Callback del escáner
+  // ──────────────────────────────────────────────────────────────
+  function onScan(text) {
+    if (isProcessing) return;
+
+    const hash = extractHash(text);
+    if (!hash) return;
+
+    // Anti-doble-scan: ignorar el mismo hash por COOLDOWN_MS
+    if (hash === lastHash) return;
+    lastHash = hash;
+    setTimeout(() => { lastHash = ''; }, COOLDOWN_MS);
+
+    showLoading();
+    callCheck(hash);
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Extracción del hash desde el texto del QR.
+  // Acepta tanto una URL completa (?id=HASH) como el hash solo.
+  // ──────────────────────────────────────────────────────────────
+  function extractHash(text) {
+    text = (text || '').trim();
+    try {
+      const url = new URL(text);
+      const id  = url.searchParams.get('id');
+      if (id && id.length >= 8) return id.toUpperCase();
+    } catch (_) { /* no es URL */ }
+
+    // Aceptar texto que sea solo hex de 8-32 chars
+    if (/^[A-Fa-f0-9]{8,32}$/.test(text)) return text.toUpperCase();
+    return null;
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // API — relative paths (mismo dominio, sin CORS proxy)
+  // ──────────────────────────────────────────────────────────────
+  async function apiRequest(url) {
+    const resp = await fetch(url);
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text || resp.statusText);
+    }
+    return resp.json();
+  }
+
+  function callCheck(hash) {
+    isProcessing = true;
+    apiRequest(`/api/check?hash=${encodeURIComponent(hash)}`)
+      .then(onResult)
+      .catch(err => { isProcessing = false; onNetworkError(err.message || err); });
+  }
+
+  function onResult(r) {
+    isProcessing = false;
+    switch (r.status) {
+      case 'WELCOME':
+        showResult('success', '✅', '¡Bienvenido!', r.nombre, '');
+        buzz([80, 40, 80]);
+        beep(880, 0.25, 'sine');
+        break;
+      case 'ALREADY_USED':
+        showResult('warning', '⚠️', 'QR ya utilizado', r.nombre,
+          `Ingresó a las ${r.fecha_ingreso}`);
+        buzz([200]);
+        beep(440, 0.4, 'square');
+        break;
+      case 'INVALID':
+        showResult('error', '❌', 'Código Inválido', 'QR no reconocido', '');
+        buzz([300, 100, 300]);
+        beep(220, 0.5, 'sawtooth');
+        break;
+      default:
+        showResult('error', '⚙️', 'Error del sistema', r.message || '', '');
+        buzz([400]);
+    }
+    refreshStats();
+  }
+
+  function onNetworkError(err) {
+    isProcessing = false;
+    showResult('error', '📡', 'Sin conexión', String(err), 'Verificar señal y reintentar');
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Overlay de resultado
+  // ──────────────────────────────────────────────────────────────
+  function showLoading() {
+    const o = qs('#result-overlay');
+    o.className = 'show loading';
+    qs('#res-icon').innerHTML  = '<div class="spinner"></div>';
+    qs('#res-title').textContent  = 'Verificando...';
+    qs('#res-name').textContent   = '';
+    qs('#res-detail').textContent = '';
+    qs('#res-cd').textContent     = '';
+  }
+
+  function showResult(type, icon, title, name, detail) {
+    const o = qs('#result-overlay');
+    o.className = `show ${type}`;
+
+    qs('#res-icon').textContent   = icon;
+    qs('#res-title').textContent  = title;
+    qs('#res-name').textContent   = name;
+    qs('#res-detail').textContent = detail;
+
+    // Cuenta regresiva visual
+    clearInterval(cdInterval);
+    let secs = Math.ceil(RESULT_MS / 1000);
+    qs('#res-cd').textContent = `Continúa en ${secs}s`;
+    cdInterval = setInterval(() => {
+      secs--;
+      qs('#res-cd').textContent = secs > 0 ? `Continúa en ${secs}s` : '';
+      if (secs <= 0) clearInterval(cdInterval);
+    }, 1000);
+
+    setTimeout(() => {
+      o.className = '';
+      clearInterval(cdInterval);
+    }, RESULT_MS);
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Estadísticas (se refrescan después de cada scan)
+  // ──────────────────────────────────────────────────────────────
+  function refreshStats() {
+    apiRequest('/api/stats')
+      .then(s => {
+        if (!s || s.status === 'ERROR') return;
+        qs('#s-in').textContent    = s.ingresaron;
+        qs('#s-pend').textContent  = s.pendientes;
+        qs('#s-total').textContent = s.total;
+      })
+      .catch(() => {});
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Input manual (fallback si la cámara no funciona)
+  // ──────────────────────────────────────────────────────────────
+  function toggleManual() {
+    const row = qs('#manual-row');
+    row.classList.toggle('open');
+    if (row.classList.contains('open')) qs('#hash-input').focus();
+  }
+
+  function manualCheck() {
+    const val = qs('#hash-input').value.trim().toUpperCase();
+    if (!val) return;
+    qs('#manual-row').classList.remove('open');
+    qs('#hash-input').value = '';
+    showLoading();
+    callCheck(val);
+  }
+
+  qs('#hash-input').addEventListener('keypress', e => {
+    if (e.key === 'Enter') manualCheck();
+  });
+
+  // ──────────────────────────────────────────────────────────────
+  // Vibración
+  // ──────────────────────────────────────────────────────────────
+  function buzz(pattern) {
+    if ('vibrate' in navigator) navigator.vibrate(pattern);
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Audio feedback (Web Audio API)
+  // ──────────────────────────────────────────────────────────────
+  let audioCtx = null;
+
+  function beep(freq, dur, type) {
+    try {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + dur);
+    } catch (_) { /* sin audio */ }
+  }
+
+</script>
+</body>
+</html>
