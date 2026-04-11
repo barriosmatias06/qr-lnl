@@ -80,15 +80,20 @@ async def register_page():
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg); color: var(--text);
-      min-height: 100dvh; display: flex; align-items: center; justify-content: center; padding: 20px;
+      min-height: 100dvh; display: flex; align-items: flex-start; justify-content: center; padding: 20px;
     }
     .card {
       background: var(--card); border: 1px solid var(--border);
-      border-radius: 16px; padding: 32px; width: 100%; max-width: 420px;
+      border-radius: 16px; padding: 0; width: 100%; max-width: 420px; overflow: hidden;
     }
-    .logo { font-size: 2.5rem; text-align: center; margin-bottom: 8px; }
-    h1 { font-size: 1.5rem; text-align: center; margin-bottom: 4px; }
-    .subtitle { text-align: center; color: var(--muted); margin-bottom: 28px; font-size: 0.9rem; }
+    .flyer {
+      width: 100%;
+      display: block;
+      border-radius: 16px 16px 0 0;
+    }
+    .card-body { padding: 28px 32px 32px; }
+    h1 { font-size: 1.3rem; text-align: center; margin-bottom: 4px; }
+    .subtitle { text-align: center; color: var(--muted); margin-bottom: 24px; font-size: 0.85rem; }
     label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px; font-weight: 500; }
     input {
       width: 100%; background: #0f172a; border: 1px solid #475569;
@@ -104,22 +109,24 @@ async def register_page():
     }
     .btn:hover { opacity: 0.9; }
     .btn:active { opacity: 0.85; }
-    .footer { text-align: center; margin-top: 20px; font-size: 0.75rem; color: var(--muted); }
+    .footer { text-align: center; margin-top: 16px; font-size: 0.75rem; color: var(--muted); }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">🎫</div>
-    <h1>Registro al Evento</h1>
-    <p class="subtitle">Completá tus datos para recibir tu código QR de acceso</p>
-    <form method="POST" action="/register">
-      <label for="nombre">Nombre completo</label>
-      <input type="text" id="nombre" name="nombre" required placeholder="Ej: Ana García" autocomplete="name">
-      <label for="email">Email</label>
-      <input type="email" id="email" name="email" required placeholder="Ej: ana@email.com" autocomplete="email">
-      <button type="submit" class="btn">Obtener mi QR →</button>
-    </form>
-    <p class="footer">El QR es único y personal. No lo compartas.</p>
+    <img class="flyer" src="/frontend/flyer.png" alt="Flyer del evento">
+    <div class="card-body">
+      <h1>Registro al Evento</h1>
+      <p class="subtitle">Completá tus datos para recibir tu código QR de acceso</p>
+      <form method="POST" action="/register">
+        <label for="nombre">Nombre completo</label>
+        <input type="text" id="nombre" name="nombre" required placeholder="Ej: Ana García" autocomplete="name">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" required placeholder="Ej: ana@email.com" autocomplete="email">
+        <button type="submit" class="btn">Obtener mi QR →</button>
+      </form>
+      <p class="footer">El QR es único y personal. No lo compartas.</p>
+    </div>
   </div>
 </body>
 </html>

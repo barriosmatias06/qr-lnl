@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(sed *)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(cp *)"
     ]
   },
   "$version": 3

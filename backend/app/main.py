@@ -50,6 +50,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Archivos estáticos (flyer, etc.)
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR)), name="frontend")
+
 
 # ── Endpoints API ──────────────────────────────────────────────────────────
 
