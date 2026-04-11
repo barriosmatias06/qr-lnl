@@ -1,13 +1,8 @@
-# Environment files
+# Environment
 .env
 
-# QR codes (generated, mounted as Docker volume)
-qr_codes/
-
-# Certbot
-nginx/certbot/
-nginx/ssl.conf
-nginx/default.conf.bak
+# Traefik
+traefik/letsencrypt/
 
 # Python
 __pycache__/
@@ -18,7 +13,6 @@ __pycache__/
 dist/
 build/
 .venv/
-venv/
 
 # OS
 .DS_Store
@@ -29,11 +23,3 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-
-# Netlify (no longer needed)
-netlify/
-netlify.toml
-
-# Google Apps Script (legacy, kept for reference)
-# Code.gs
-# Index.html (original)

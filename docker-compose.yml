@@ -1,27 +1,49 @@
-# ═══════════════════════════════════════════════════════════════════
-#  docker-compose.yml — Control de Acceso QR
-# ═══════════════════════════════════════════════════════════════════
-
 services:
 
+  # ── Traefik (Reverse Proxy + Let's Encrypt) ────────────────────────
+  traefik:
+    image: traefik:v3.0
+    container_name: qr-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/letsencrypt:/letsencrypt
+    command:
+      - "--api.dashboard=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-barriosmn06@gmail.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+    networks:
+      - app-network
+
+  # ── Backend (FastAPI) ───────────────────────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: qr-backend
     restart: unless-stopped
-    expose:
-      - "8000"
-    ports:
-      - "127.0.0.1:8000:8000"
     environment:
       DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-evento}:${POSTGRES_PASSWORD:-evento_pass}@db:5432/${POSTGRES_DB:-evento_db}"
-      QR_IMAGES_DIR: /app/qr_codes
-    volumes:
-      - ./frontend:/app/frontend:ro
+      DOMAIN: ${DOMAIN:-localhost}
     depends_on:
       db:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.app.loadbalancer.server.port=8000"
     networks:
       - app-network
     healthcheck:
@@ -31,6 +53,7 @@ services:
       retries: 3
       start_period: 10s
 
+  # ── PostgreSQL ──────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
     container_name: qr-db
@@ -49,35 +72,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: qr-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./nginx/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
-      - ./nginx/certbot/www:/var/www/certbot:ro
-      - ./nginx/certbot/conf:/etc/letsencrypt:ro
-      - ./nginx/ssl-fullchain.pem:/etc/nginx/ssl-temp/fullchain.pem:ro
-      - ./nginx/ssl-privkey.pem:/etc/nginx/ssl-temp/privkey.pem:ro
-    depends_on:
-      - backend
-    networks:
-      - app-network
-
-  certbot:
-    image: certbot/certbot:latest
-    container_name: qr-certbot
-    volumes:
-      - ./nginx/certbot/www:/var/www/certbot:rw
-      - ./nginx/certbot/conf:/etc/letsencrypt:rw
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; done'"
-    networks:
-      - app-network
 
 volumes:
   postgres_data:

@@ -1,9 +1,0 @@
-# Generación de QR e imágenes (obligatorio)
-qrcode[pil]>=7.4
-Pillow>=10.0
-tqdm>=4.66
-
-# Integración con Google APIs (opcional, solo para --upload-sheet y --upload-drive)
-gspread>=6.0
-google-auth>=2.0
-google-api-python-client>=2.100
