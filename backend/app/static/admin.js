@@ -328,7 +328,7 @@
     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
   }
 
-  // ── Init ───────────────────────────────────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────────
   function init() {
     // Tab switching
     $$('.tab[data-tab]').forEach(function(tab) {
@@ -359,21 +359,23 @@
       });
     }
 
-    // Generate codes buttons
-    var btnGenOpen = document.querySelector('[onclick*="openGenerateModal"], .btn-success');
-    if (btnGenOpen) btnGenOpen.addEventListener('click', openGenerateModal);
+    // Generate codes modal buttons
+    var btnOpen = $('#btn-generate');
+    if (btnOpen) btnOpen.addEventListener('click', openGenerateModal);
 
-    var btnGenClose = document.querySelector('[onclick*="closeGenerateModal"]');
-    if (btnGenClose) btnGenClose.addEventListener('click', closeGenerateModal);
+    var btnClose = $('#btn-close-generate');
+    if (btnClose) btnClose.addEventListener('click', closeGenerateModal);
 
-    var btnGenConfirm = document.querySelector('[onclick*="doGenerate"]');
-    if (btnGenConfirm) btnGenConfirm.addEventListener('click', doGenerate);
+    var btnConfirm = $('#btn-confirm-generate');
+    if (btnConfirm) btnConfirm.addEventListener('click', doGenerate);
 
-    var btnCopyAll = document.querySelector('[onclick*="copyAllCodes"]');
+    var btnCopyAll = $('#btn-copy-all');
     if (btnCopyAll) btnCopyAll.addEventListener('click', copyAllCodes);
 
-    var btnShareWA = document.querySelector('[onclick*="shareAllWhatsApp"]');
-    if (btnShareWA) btnShareWA.addEventListener('click', shareAllWhatsApp);
+    var btnWA = $('#btn-whatsapp');
+    if (btnWA) btnWA.addEventListener('click', shareAllWhatsApp);
+
+    console.log('Admin dashboard initialized');
 
     // Load data
     loadData();
