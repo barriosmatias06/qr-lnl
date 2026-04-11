@@ -4,10 +4,28 @@ Modelos SQLAlchemy para la base de datos del evento.
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import BigInteger, Boolean, DateTime, String, ForeignKey, Integer
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+class InvitationCode(Base):
+    """Código de invitación para registro controlado."""
+
+    __tablename__ = "invitation_codes"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
+    used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(datetime.timezone.utc))
+    usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Relación con el attendee que usó este código
+    attendee_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("attendees.id"), nullable=True)
+
+    def __repr__(self):
+        return f"<InvitationCode code={self.code} used={self.used}>"
 
 
 class Attendee(Base):
@@ -17,13 +35,20 @@ class Attendee(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     nombre: Mapped[str] = mapped_column(String(255), nullable=False)
+    apellido: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    nro_documento: Mapped[str] = mapped_column(String(32), nullable=False, default="")
     email: Mapped[str] = mapped_column(String(255), nullable=False, default="")
-    hash_unique: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    invitado_por: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    qr_token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    hash_unique: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
     estado_ingreso: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fecha_ingreso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Relación con el código de invitación usado
+    invitation_code_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("invitation_codes.id"), nullable=True)
+
     def __repr__(self):
-        return f"<Attendee id={self.id} nombre={self.nombre} hash={self.hash_unique[:8]}...>"
+        return f"<Attendee id={self.id} nombre={self.nombre} {self.apellido} qr_token={self.qr_token[:8]}...>"
 
 
 class AdminUser(Base):

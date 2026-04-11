@@ -30,7 +30,7 @@ async def init_db():
     """Crear tablas si no existen (idempotente)."""
     async with async_engine.begin() as conn:
         # Importar modelos para que se registren en Base.metadata
-        from app.models import Attendee, AdminUser  # noqa: F401
+        from app.models import Attendee, AdminUser, InvitationCode  # noqa: F401
         await conn.run_sync(Base.metadata.create_all)
         # Seed de usuarios admin si no existen
         await conn.run_sync(_seed_admin_users)

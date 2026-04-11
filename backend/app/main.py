@@ -62,6 +62,7 @@ async def check_attendee(hash: str = Query(..., min_length=8, max_length=64)):
     """
     Valida el hash de un asistente y registra su primer ingreso.
     Usa row-level locking (SELECT ... FOR UPDATE) para evitar race conditions.
+    Busca por qr_token o hash_unique (compatibilidad hacia atrás).
     """
     hash_clean = hash.strip().upper()
 
@@ -72,7 +73,9 @@ async def check_attendee(hash: str = Query(..., min_length=8, max_length=64)):
         async with session.begin():
             stmt = (
                 select(Attendee)
-                .where(Attendee.hash_unique == hash_clean)
+                .where(
+                    (Attendee.qr_token == hash_clean) | (Attendee.hash_unique == hash_clean)
+                )
                 .with_for_update()  # row-level lock
             )
             result = await session.execute(stmt)
@@ -96,7 +99,7 @@ async def check_attendee(hash: str = Query(..., min_length=8, max_length=64)):
 
             return CheckResponse(
                 status=StatusType.WELCOME,
-                nombre=attendee.nombre,
+                nombre=f"{attendee.nombre} {attendee.apellido}".strip(),
                 fecha_ingreso=now.strftime("%d/%m/%Y %H:%M:%S"),
             )
 
