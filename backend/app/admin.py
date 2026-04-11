@@ -7,11 +7,12 @@ import base64
 import random
 import string
 from datetime import datetime, timezone
+from pathlib import Path
 
 import qrcode
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 from sqlalchemy import select, func, desc
 
 from app.database import async_session
@@ -34,7 +35,7 @@ def _base_url() -> str:
 
 
 def _generate_invitation_code() -> str:
-    """Genera un código de invitación tipo INV-XXXXX."""
+    """Genera un código de invitación tipo INV-XXXXXXXX."""
     chars = string.ascii_uppercase + string.digits
     random_part = ''.join(random.choices(chars, k=8))
     return f"INV-{random_part}"
@@ -42,7 +43,12 @@ def _generate_invitation_code() -> str:
 
 def _make_qr(hash_id: str) -> bytes:
     url = f"{_base_url()}/?id={hash_id}"
-    qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=4)
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=10,
+        border=4,
+    )
     qr.add_data(url)
     qr.make(fit=True)
     img = qr.make_image(fill_color="black", back_color="white").convert("RGB")
@@ -50,6 +56,20 @@ def _make_qr(hash_id: str) -> bytes:
     img.save(buf, format="PNG", optimize=True)
     buf.seek(0)
     return buf.read()
+
+
+# ── Serve static files ────────────────────────────────────────────────────
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@router.get("/static/admin.js")
+async def serve_admin_js():
+    """Serve the admin dashboard JavaScript."""
+    js_path = STATIC_DIR / "admin.js"
+    if not js_path.is_file():
+        return Response(content="Not found", status_code=404, media_type="text/plain")
+    return Response(content=js_path.read_text(), media_type="application/javascript")
 
 
 # ── Admin Dashboard HTML ──────────────────────────────────────────────────
@@ -156,7 +176,6 @@ ADMIN_HTML = """<!DOCTYPE html>
     <span class="badge" id="last-update">—</span>
   </div>
   <div class="container">
-    <!-- Tabs -->
     <div class="tabs">
       <div class="tab active" data-tab="attendees" onclick="switchTab('attendees')">👥 Asistentes</div>
       <div class="tab" data-tab="invitations" onclick="switchTab('invitations')">🎟️ Invitaciones</div>
@@ -254,7 +273,7 @@ ADMIN_HTML = """<!DOCTYPE html>
                       color:var(--text);padding:8px;text-align:center;font-size:.9rem">
       </div>
       <button class="btn" onclick="doGenerate()" style="width:100%;margin-bottom:12px">Generar Códigos</button>
-      <button class="btn" style="width:100%;background:transparent;border:1px solid var(--border)" onclick="document.getElementById('generate-modal').classList.remove('open')">Cerrar</button>
+      <button class="btn" style="width:100%;background:transparent;border:1px solid var(--border)" onclick="closeGenerateModal()">Cerrar</button>
       <div id="generated-codes" style="display:none">
         <div class="gen-codes-box" id="gen-codes-list"></div>
         <div style="margin-top:12px;display:flex;gap:8px">
@@ -268,244 +287,14 @@ ADMIN_HTML = """<!DOCTYPE html>
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
-<script>
-  var ALL_DATA = [];
-  var invPage = 1;
-  var lastGeneratedCodes = [];
-  var CAPACITY = 1800;
-
-  function switchTab(name) {
-    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-    document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
-    document.querySelector('.tab[data-tab="' + name + '"]').classList.add('active');
-    document.getElementById('tab-' + name).classList.add('active');
-    if (name === 'invitations') { invPage = 1; loadInvitations(); }
-  }
-
-  // ── Attendees ─────────────────────────────────────────────────────────
-  function loadData() {
-    fetch('/api/admin/data').then(function(r) { return r.json(); }).then(function(json) {
-      ALL_DATA = json.attendees;
-      renderStats(json);
-      renderTable(ALL_DATA);
-      document.getElementById('last-update').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
-    }).catch(function() {});
-  }
-
-  function renderStats(json) {
-    var total = json.total;
-    var ingresaron = json.ingresaron;
-    document.getElementById('s-total').textContent = total;
-    document.getElementById('s-ingresaron').textContent = ingresaron;
-    document.getElementById('s-pendientes').textContent = total - ingresaron;
-    document.getElementById('s-lugares').textContent = Math.max(0, CAPACITY - ingresaron);
-  }
-
-  function renderTable(data) {
-    var tbody = document.getElementById('tbody');
-    var table = document.getElementById('table');
-    var loading = document.getElementById('loading');
-    var noData = document.getElementById('no-data');
-    loading.style.display = 'none';
-
-    if (!data.length) { noData.style.display = 'block'; table.style.display = 'none'; return; }
-    noData.style.display = 'none';
-    table.style.display = 'table';
-
-    var html = '';
-    for (var i = 0; i < data.length; i++) {
-      var a = data[i];
-      var status = a.estado_ingreso
-        ? '<span class="status in">✓ Ingresó</span>'
-        : '<span class="status pending">Pendiente</span>';
-      var fecha = a.fecha_ingreso || '—';
-      var invCode = a.invitation_code || '—';
-      var fullName = (a.nombre || '') + ' ' + (a.apellido || '');
-      var qrToken = a.qr_token || a.hash_unique || '';
-
-      html += '<tr>';
-      html += '<td><span class="qr-mini" onclick="showQR(\\'' + qrToken + '\\',\\'' + esc(fullName) + '\\')">📱</span></td>';
-      html += '<td>' + esc(a.nombre) + '</td>';
-      html += '<td>' + esc(a.apellido || '—') + '</td>';
-      html += '<td>' + esc(a.nro_documento || '—') + '</td>';
-      html += '<td><span class="inv-code">' + esc(invCode) + '</span></td>';
-      html += '<td>' + esc(a.invitado_por || '—') + '</td>';
-      html += '<td>' + status + '</td>';
-      html += '<td>' + fecha + '</td>';
-      html += '</tr>';
-    }
-    tbody.innerHTML = html;
-  }
-
-  function showQR(hash, name) {
-    fetch('/admin/qr/' + hash).then(function(r) { return r.blob(); }).then(function(blob) {
-      document.getElementById('modal-qr-img').src = URL.createObjectURL(blob);
-      document.getElementById('modal-name').textContent = name;
-      document.getElementById('qr-modal').classList.add('open');
-    });
-  }
-
-  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-
-  document.getElementById('search').addEventListener('input', applyFilters);
-  document.getElementById('filter-status').addEventListener('change', applyFilters);
-
-  function applyFilters() {
-    var q = document.getElementById('search').value.toLowerCase();
-    var f = document.getElementById('filter-status').value;
-    var data = ALL_DATA;
-    if (q) data = data.filter(function(a) {
-      return (a.nombre || '').toLowerCase().indexOf(q) >= 0 ||
-             (a.apellido || '').toLowerCase().indexOf(q) >= 0 ||
-             (a.nro_documento || '').toLowerCase().indexOf(q) >= 0 ||
-             (a.invitation_code || '').toLowerCase().indexOf(q) >= 0;
-    });
-    if (f === 'in') data = data.filter(function(a) { return a.estado_ingreso; });
-    if (f === 'pending') data = data.filter(function(a) { return !a.estado_ingreso; });
-    renderTable(data);
-  }
-
-  // ── Invitations ───────────────────────────────────────────────────────
-  function loadInvitations() {
-    document.getElementById('inv-loading').style.display = 'block';
-    document.getElementById('inv-table').style.display = 'none';
-    document.getElementById('inv-no-data').style.display = 'none';
-    var filter = document.getElementById('inv-filter').value;
-    fetch('/admin/api/invitations?page=' + invPage + '&status_filter=' + filter)
-      .then(function(r) { return r.json(); }).then(function(json) {
-        document.getElementById('inv-loading').style.display = 'none';
-        document.getElementById('inv-total').textContent = json.total;
-        document.getElementById('inv-used').textContent = json.used;
-        document.getElementById('inv-unused').textContent = json.unused;
-
-        if (!json.codes.length) {
-          document.getElementById('inv-no-data').style.display = 'block';
-          document.getElementById('inv-pagination').innerHTML = '';
-          return;
-        }
-
-        document.getElementById('inv-table').style.display = 'table';
-        var html = '';
-        for (var i = 0; i < json.codes.length; i++) {
-          var c = json.codes[i];
-          var st = c.used
-            ? '<span class="status used">✓ Usado</span>'
-            : '<span class="status unused">Disponible</span>';
-          var actions;
-          if (c.used) {
-            actions = '<span style="color:var(--muted);font-size:.75rem">—</span>';
-          } else {
-            actions = '<div class="inv-actions">';
-            actions += '<button class="btn btn-sm btn-danger" onclick="revokeCode(' + c.id + ',\\'' + esc(c.code) + '\\')">Revocar</button>';
-            actions += '<button class="btn btn-sm" style="background:var(--orange)" onclick="deleteCode(' + c.id + ',\\'' + esc(c.code) + '\\')">Eliminar</button>';
-            actions += '</div>';
-          }
-          var usedBy = c.attendee_name
-            ? '<span style="color:var(--blue);font-size:.8rem">' + esc(c.attendee_name) + '</span>'
-            : '—';
-          html += '<tr>';
-          html += '<td><span class="inv-code">' + esc(c.code) + '</span><span class="copy-btn" onclick="copyCode(\\'' + esc(c.code) + '\\')" title="Copiar">📋</span></td>';
-          html += '<td>' + st + '</td>';
-          html += '<td>' + (c.creado_en || '—') + '</td>';
-          html += '<td>' + usedBy + '</td>';
-          html += '<td>' + actions + '</td>';
-          html += '</tr>';
-        }
-        document.getElementById('inv-tbody').innerHTML = html;
-
-        // Pagination
-        var pagHtml = '<button onclick="invPage=' + (json.page - 1) + ';loadInvitations()" ' + (json.page <= 1 ? 'disabled' : '') + '>← Anterior</button>';
-        pagHtml += '<span>Pág ' + json.page + ' de ' + (json.pages || 1) + '</span>';
-        pagHtml += '<button onclick="invPage=' + (json.page + 1) + ';loadInvitations()" ' + (json.page >= json.pages ? 'disabled' : '') + '>Siguiente →</button>';
-        document.getElementById('inv-pagination').innerHTML = pagHtml;
-      }).catch(function() {
-        document.getElementById('inv-loading').style.display = 'none';
-      });
-  }
-
-  function copyCode(code) {
-    navigator.clipboard.writeText(code).then(function() {
-      showToast('Código copiado: ' + code);
-    });
-  }
-
-  function revokeCode(id, code) {
-    if (!confirm('¿Revocar el código ' + code + '?')) return;
-    fetch('/admin/api/invitations/' + id + '/revoke', { method: 'POST' }).then(function(r) {
-      if (r.ok) { loadInvitations(); showToast('Código ' + code + ' revocado'); }
-      else { alert('Error al revocar'); }
-    });
-  }
-
-  function deleteCode(id, code) {
-    if (!confirm('¿Eliminar el código ' + code + '?')) return;
-    fetch('/admin/api/invitations/' + id, { method: 'DELETE' }).then(function(r) {
-      if (r.ok) { loadInvitations(); showToast('Código ' + code + ' eliminado'); }
-      else { alert('Error al eliminar'); }
-    });
-  }
-
-  // ── Generate Codes ────────────────────────────────────────────────────
-  function openGenerateModal() {
-    document.getElementById('generate-modal').classList.add('open');
-    document.getElementById('generated-codes').style.display = 'none';
-  }
-
-  function doGenerate() {
-    var count = parseInt(document.getElementById('gen-count').value) || 1;
-    fetch('/admin/api/invitations/generate?count=' + count, { method: 'POST' })
-      .then(function(r) { return r.json(); }).then(function(json) {
-        lastGeneratedCodes = json.codes;
-        var html = '';
-        for (var i = 0; i < json.codes.length; i++) {
-          html += '<div class="gen-code-item">';
-          html += '<span class="inv-code">' + esc(json.codes[i]) + '</span>';
-          html += '<span class="copy-btn" onclick="copyCode(\\'' + esc(json.codes[i]) + '\\')">📋</span>';
-          html += '</div>';
-        }
-        document.getElementById('gen-codes-list').innerHTML = html;
-        document.getElementById('generated-codes').style.display = 'block';
-        loadInvitations();
-        showToast(json.count + ' códigos generados');
-      });
-  }
-
-  function copyAllCodes() {
-    var text = lastGeneratedCodes.join('\\n');
-    navigator.clipboard.writeText(text).then(function() {
-      showToast('Todos los códigos copiados');
-    });
-  }
-
-  function shareAllWhatsApp() {
-    var text = '🎫 *Código de Invitación al Evento*\\n\\n';
-    text += 'Usá este código para registrarte:\\n\\n';
-    for (var i = 0; i < lastGeneratedCodes.length; i++) {
-      text += '▸ ' + lastGeneratedCodes[i] + '\\n';
-    }
-    text += '\\nIngresá a ' + window.location.origin + '/register para completar tu registro.';
-    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
-  }
-
-  // ── Toast ─────────────────────────────────────────────────────────────
-  function showToast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, 2500);
-  }
-
-  // ── Init ──────────────────────────────────────────────────────────────
-  loadData();
-  setInterval(loadData, 30000);
-</script>
+  <script src="/static/admin.js"></script>
 </body>
 </html>"""
 
 
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_dashboard(request: Request):
-    """Panel de administración con estadísticas y listado."""
+    """Panel de administración — requiere autenticación."""
     user = await get_current_user(request)
     if not user:
         return RedirectResponse(url="/admin/login", status_code=302)
@@ -527,25 +316,15 @@ async def admin_data(user: AdminUser = Depends(require_user)):
         result = await session.execute(stmt)
         attendees = result.scalars().all()
 
-        # Build lookup for invitation codes
+        # Build lookup: attendee_id -> invitation code
         attendee_codes = {}
-        attendee_names = {}
         for a in attendees:
             if a.invitation_code_id:
-                code_stmt = select(InvitationCode).where(InvitationCode.id == a.invitation_code_id)
-                code_result = await session.execute(code_stmt)
-                code = code_result.scalar_one_or_none()
-                if code:
-                    attendee_codes[a.id] = code.code
-
-        # Build reverse lookup: for each invitation code, find who used it
-        code_attendee = {}
-        for a in attendees:
-            if a.invitation_code_id:
-                full_name = a.nombre
-                if a.apellido:
-                    full_name += " " + a.apellido
-                code_attendee[a.invitation_code_id] = full_name
+                cs = select(InvitationCode).where(InvitationCode.id == a.invitation_code_id)
+                cr = await session.execute(cs)
+                c = cr.scalar_one_or_none()
+                if c:
+                    attendee_codes[a.id] = c.code
 
     return {
         "total": total,
@@ -567,7 +346,6 @@ async def admin_data(user: AdminUser = Depends(require_user)):
             }
             for a in attendees
         ],
-        "_code_attendee": code_attendee,
     }
 
 
@@ -613,23 +391,20 @@ async def list_invitation_codes(
 ):
     """Lista todos los códigos de invitación con paginación."""
     async with async_session() as session:
-        # Stats
-        total_stmt = select(func.count(InvitationCode.id))
-        used_stmt = select(func.count(InvitationCode.id)).where(InvitationCode.used.is_(True))
-        unused_stmt = select(func.count(InvitationCode.id)).where(InvitationCode.used.is_(False))
+        total = (await session.execute(select(func.count(InvitationCode.id)))).scalar() or 0
+        used_count = (await session.execute(
+            select(func.count(InvitationCode.id)).where(InvitationCode.used.is_(True))
+        )).scalar() or 0
+        unused_count = (await session.execute(
+            select(func.count(InvitationCode.id)).where(InvitationCode.used.is_(False))
+        )).scalar() or 0
 
-        total = (await session.execute(total_stmt)).scalar() or 0
-        used_count = (await session.execute(used_stmt)).scalar() or 0
-        unused_count = (await session.execute(unused_stmt)).scalar() or 0
-
-        # Query with filters
         stmt = select(InvitationCode).order_by(desc(InvitationCode.creado_en))
         if status_filter == "used":
             stmt = stmt.where(InvitationCode.used.is_(True))
         elif status_filter == "unused":
             stmt = stmt.where(InvitationCode.used.is_(False))
 
-        # Pagination
         offset = (page - 1) * per_page
         stmt = stmt.offset(offset).limit(per_page)
         result = await session.execute(stmt)
@@ -639,14 +414,16 @@ async def list_invitation_codes(
         attendee_names = {}
         for c in codes:
             if c.attendee_id:
-                att_stmt = select(Attendee).where(Attendee.id == c.attendee_id)
-                att_result = await session.execute(att_stmt)
-                att = att_result.scalar_one_or_none()
+                att_s = select(Attendee).where(Attendee.id == c.attendee_id)
+                att_r = await session.execute(att_s)
+                att = att_r.scalar_one_or_none()
                 if att:
                     name = att.nombre
                     if att.apellido:
                         name += " " + att.apellido
                     attendee_names[c.id] = name
+
+        total_pages = (total + per_page - 1) // per_page if per_page > 0 else 1
 
         return {
             "total": total,
@@ -654,7 +431,7 @@ async def list_invitation_codes(
             "unused": unused_count,
             "page": page,
             "per_page": per_page,
-            "pages": (total + per_page - 1) // per_page if per_page > 0 else 1,
+            "pages": total_pages,
             "codes": [
                 {
                     "id": c.id,
@@ -672,23 +449,19 @@ async def list_invitation_codes(
 
 @router.post("/admin/api/invitations/{code_id}/revoke")
 async def revoke_invitation_code(code_id: int, user: AdminUser = Depends(require_user)):
-    """Revoca un código de invitación (solo si no fue usado)."""
+    """Revoca un código de invitación no usado."""
     async with async_session() as session:
         stmt = select(InvitationCode).where(InvitationCode.id == code_id)
         result = await session.execute(stmt)
         invitation = result.scalar_one_or_none()
-
         if not invitation:
-            return Response(content="Código no encontrado", status_code=404, media_type="text/plain")
-
+            return Response(content="No encontrado", status_code=404, media_type="text/plain")
         if invitation.used:
-            return Response(content="No se puede revocar un código ya utilizado", status_code=409, media_type="text/plain")
-
+            return Response(content="Ya utilizado", status_code=409, media_type="text/plain")
         invitation.used = True
         invitation.usado_en = datetime.now(timezone.utc)
         await session.commit()
-
-    return {"success": True, "message": f"Código {invitation.code} revocado"}
+    return {"success": True}
 
 
 @router.delete("/admin/api/invitations/{code_id}")
@@ -698,14 +471,10 @@ async def delete_invitation_code(code_id: int, user: AdminUser = Depends(require
         stmt = select(InvitationCode).where(InvitationCode.id == code_id)
         result = await session.execute(stmt)
         invitation = result.scalar_one_or_none()
-
         if not invitation:
-            return Response(content="Código no encontrado", status_code=404, media_type="text/plain")
-
+            return Response(content="No encontrado", status_code=404, media_type="text/plain")
         if invitation.used:
-            return Response(content="No se puede eliminar un código ya utilizado", status_code=409, media_type="text/plain")
-
+            return Response(content="Ya utilizado", status_code=409, media_type="text/plain")
         await session.delete(invitation)
         await session.commit()
-
-    return {"success": True, "message": f"Código {invitation.code} eliminado"}
+    return {"success": True}
