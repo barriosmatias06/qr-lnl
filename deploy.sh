@@ -52,7 +52,6 @@ fi
 # ── 3. .env ───────────────────────────────────────────────────────
 echo ""
 echo "[3/8] .env..."
-
 if [ -f "$APP_DIR/.env" ] && grep -q "POSTGRES_PASSWORD" "$APP_DIR/.env"; then
     echo "  Reutilizando .env existente..."
     source "$APP_DIR/.env"
@@ -78,21 +77,39 @@ $PYTHON generate_qr.py --url "https://${DOMAIN}"
 QR_COUNT=$(find qr_codes -name '*.png' 2>/dev/null | wc -l)
 echo "  OK $QR_COUNT QRs"
 
-# ── 5. Nginx configs ──────────────────────────────────────────────
+# ── 5. Nginx configs (Phase 1: HTTP only) ─────────────────────────
 echo ""
-echo "[5/8] Nginx configs..."
+echo "[5/8] Nginx configs (HTTP)..."
 mkdir -p "$APP_DIR/nginx/certbot/conf"
 mkdir -p "$APP_DIR/nginx/certbot/www"
 
-# Create empty ssl.conf so Docker mounts a file not a directory
+# default.conf: HTTP proxy to backend + acme-challenge (NO redirect yet)
+cat > "$APP_DIR/nginx/default.conf" << 'HTTPEOF'
+server {
+    listen 80;
+    server_name _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+HTTPEOF
+
+# Empty ssl.conf so Docker mounts a file, not a directory
 touch "$APP_DIR/nginx/ssl.conf"
 
-# default.conf stays as-is from repo (HTTP-only with redirect)
 echo "  OK"
 
-# ── 6. Start stack (HTTP only, no SSL yet) ────────────────────────
+# ── 6. Start stack (HTTP only) ────────────────────────────────────
 echo ""
-echo "[6/8] Docker compose..."
+echo "[6/8] Docker compose (HTTP)..."
 cd "$APP_DIR"
 docker compose down 2>/dev/null || true
 docker compose up -d --build
@@ -102,26 +119,36 @@ HEALTHY=false
 for i in $(seq 1 45); do
     if curl -sf http://127.0.0.1:8000/health &>/dev/null; then
         HEALTHY=true
-        echo "  OK backend listo ($i/s)"
+        echo "  OK backend listo (${i}s)"
         break
     fi
     sleep 1
 done
 
 if [ "$HEALTHY" != "true" ]; then
-    echo "  ERROR backend no arranco. Logs:"
-    docker compose logs backend 2>/dev/null | tail -20
-    echo "  Intentando continuar..."
+    echo "  ERROR backend no arranco:"
+    docker compose logs backend 2>/dev/null | tail -30
+    exit 1
+fi
+
+# Test HTTP via nginx (port 80)
+sleep 2
+if curl -sf http://127.0.0.1:80/health &>/dev/null; then
+    echo "  OK nginx proxy funcionando"
+else
+    echo "  WARN nginx no responde aun, ver: docker compose logs nginx"
+    docker compose logs nginx 2>/dev/null | tail -10
 fi
 
 # ── 7. Seed data ──────────────────────────────────────────────────
 echo ""
 echo "[7/8] Importando asistentes..."
+sleep 5
 SEED=$(curl -s -X POST http://127.0.0.1:8000/api/seed 2>/dev/null || echo "no disponible")
-echo "  $SEED"
+echo "  Seed: $SEED"
 
 STATS=$(curl -s http://127.0.0.1:8000/api/stats 2>/dev/null || echo "no disponible")
-echo "  $STATS"
+echo "  Stats: $STATS"
 
 # ── 8. SSL Certificate ───────────────────────────────────────────
 echo ""
@@ -129,11 +156,9 @@ echo "==============================="
 echo "  SSL Certificate..."
 echo "==============================="
 
-# Ensure nginx + certbot are up
-docker compose up -d nginx certbot
-sleep 5
+docker compose up -d certbot
+sleep 3
 
-# Obtain cert
 docker compose run --rm certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \
@@ -145,11 +170,38 @@ docker compose run --rm certbot certonly \
 
 echo "  Certificado obtenido"
 
-# Generate real ssl.conf from template
+# Now switch to HTTPS: write final nginx configs
+cat > "$APP_DIR/nginx/default.conf" << 'HTTPSEOF'
+server {
+    listen 80;
+    server_name _;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+HTTPSEOF
+
 sed "s/\${DOMAIN}/${DOMAIN}/g" "$APP_DIR/nginx/ssl.conf.template" > "$APP_DIR/nginx/ssl.conf"
 
-# Restart nginx to pick up SSL
-docker compose up -d --force-recreate nginx backend
+# Restart nginx with SSL config
+docker compose up -d --force-recreate nginx
+
+echo ""
+echo "  Verificando HTTPS..."
+sleep 5
+
+# Check if nginx started with SSL
+if curl -skf https://127.0.0.1:443/health &>/dev/null; then
+    echo "  OK HTTPS funcionando"
+else
+    echo "  WARN HTTPS no responde, ver: docker compose logs nginx"
+    docker compose logs nginx 2>/dev/null | tail -10
+fi
 
 echo ""
 echo "==============================="
@@ -160,5 +212,6 @@ echo ""
 echo "  Comandos utiles:"
 echo "    cd $APP_DIR"
 echo "    docker compose logs -f backend"
+echo "    docker compose logs -f nginx"
 echo "    docker compose exec db psql -U evento -d evento_db"
 echo ""
