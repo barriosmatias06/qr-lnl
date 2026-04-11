@@ -20,6 +20,7 @@ services:
     volumes:
       - ./qr_codes:/app/qr_codes:ro
       - ./asistentes_import.csv:/app/data/asistentes_import.csv:ro
+      - ./frontend:/app/frontend:ro
     depends_on:
       db:
         condition: service_healthy
