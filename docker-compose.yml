@@ -35,15 +35,23 @@ services:
     environment:
       DATABASE_URL: "postgresql+asyncpg://${POSTGRES_USER:-evento}:${POSTGRES_PASSWORD:-evento_pass}@db:5432/${POSTGRES_DB:-evento_db}"
       DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./frontend:/app/frontend:ro
     depends_on:
       db:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
+      # Main domain: register page
       - "traefik.http.routers.app.rule=Host(`dominic.com.ar`)"
       - "traefik.http.routers.app.entrypoints=websecure"
       - "traefik.http.routers.app.tls.certresolver=letsencrypt"
       - "traefik.http.services.app.loadbalancer.server.port=8000"
+      # Empleados subdomain: scanner
+      - "traefik.http.routers.empleados.rule=Host(`empleados.dominic.com.ar`)"
+      - "traefik.http.routers.empleados.entrypoints=websecure"
+      - "traefik.http.routers.empleados.tls.certresolver=letsencrypt"
+      - "traefik.http.services.empleados.loadbalancer.server.port=8000"
     networks:
       - app-network
     healthcheck:
