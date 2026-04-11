@@ -173,6 +173,10 @@ async def health_check():
 from app.register import router as register_router
 app.include_router(register_router)
 
+# ── Auth routes (login/logout) ───────────────────────────────────────────
+from app.auth import router as auth_router
+app.include_router(auth_router)
+
 # ── Admin routes ──────────────────────────────────────────────────────────
 from app.admin import router as admin_router
 app.include_router(admin_router)

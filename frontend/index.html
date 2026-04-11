@@ -279,9 +279,37 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Botón Administrador (esquina) ───────────────────────────── */
+    .btn-admin {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 500;
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 7px 14px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: none;
+      align-items: center;
+      gap: 5px;
+      transition: color 0.15s, border-color 0.15s;
+      cursor: pointer;
+    }
+
+    .btn-admin:hover { color: var(--text); border-color: var(--blue); }
+    .btn-admin.visible { display: flex; }
   </style>
 </head>
 <body>
+
+<!-- ── Botón Administrador (esquina superior derecha) ────────────────────── -->
+<a href="/admin" class="btn-admin" id="btn-admin">🛡️ Admin</a>
 
 <!-- ── Pantalla inicial: pedir permiso de cámara ─────────────────────────── -->
 <div id="perm-screen">
@@ -376,6 +404,7 @@
       hide('perm-screen');
       show('stats-bar');
       show('scanner-wrap');
+      document.getElementById('btn-admin').classList.add('visible');
       showLoading();
       callCheck(id);
     }
@@ -389,6 +418,7 @@
     hide('perm-screen');
     show('stats-bar', 'flex');
     show('scanner-wrap', 'flex');
+    document.getElementById('btn-admin').classList.add('visible');
     refreshStats();
 
     scanner = new Html5Qrcode('reader');

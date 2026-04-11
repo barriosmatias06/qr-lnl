@@ -7,13 +7,14 @@ import base64
 from datetime import datetime
 
 import qrcode
-from fastapi import APIRouter, Query
-from fastapi.responses import HTMLResponse, Response
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import select, func, desc
 
 from app.database import async_session
 from app.models import Attendee
+from app.auth import require_user, get_current_user, AdminUser
 
 router = APIRouter()
 
@@ -43,8 +44,11 @@ def _make_qr(hash_id: str) -> bytes:
 
 
 @router.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard():
+async def admin_dashboard(request: Request):
     """Panel de administración con estadísticas y listado."""
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/admin/login", status_code=302)
     return """<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -246,7 +250,7 @@ async def admin_dashboard():
 
 
 @router.get("/api/admin/data")
-async def admin_data():
+async def admin_data(user: AdminUser = Depends(require_user)):
     """JSON con todos los asistentes y estadísticas."""
     async with async_session() as session:
         total = (await session.execute(select(func.count(Attendee.id)))).scalar() or 0
@@ -277,7 +281,7 @@ async def admin_data():
 
 
 @router.get("/admin/qr/{hash_id}")
-async def admin_qr(hash_id: str):
+async def admin_qr(hash_id: str, user: AdminUser = Depends(require_user)):
     """Genera QR para vista previa en admin."""
     async with async_session() as session:
         stmt = select(Attendee).where(Attendee.hash_unique == hash_id.upper())
