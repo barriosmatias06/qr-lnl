@@ -52,8 +52,15 @@ fi
 # ── 3. .env ───────────────────────────────────────────────────────
 echo ""
 echo "[3/8] .env..."
-DB_PASS=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20)
-printf 'POSTGRES_DB=evento_db\nPOSTGRES_USER=evento\nPOSTGRES_PASSWORD=%s\nDOMAIN=%s\n' "$DB_PASS" "$DOMAIN" > "$APP_DIR/.env"
+
+if [ -f "$APP_DIR/.env" ] && grep -q "POSTGRES_PASSWORD" "$APP_DIR/.env"; then
+    echo "  Reutilizando .env existente..."
+    source "$APP_DIR/.env"
+    DB_PASS="$POSTGRES_PASSWORD"
+else
+    DB_PASS=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 20)
+    printf 'POSTGRES_DB=evento_db\nPOSTGRES_USER=evento\nPOSTGRES_PASSWORD=%s\nDOMAIN=%s\n' "$DB_PASS" "$DOMAIN" > "$APP_DIR/.env"
+fi
 echo "  OK"
 
 # ── 4. QR generation ──────────────────────────────────────────────
