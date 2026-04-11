@@ -83,15 +83,8 @@ echo "[5/8] SSL temp + nginx..."
 mkdir -p "$APP_DIR/nginx/certbot/conf"
 mkdir -p "$APP_DIR/nginx/certbot/www"
 
-# Generate self-signed cert so nginx can listen on 443 from the start
-echo "  Generando certificado temporal..."
-openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
-    -keyout "$APP_DIR/nginx/ssl-privkey.pem" \
-    -out "$APP_DIR/nginx/ssl-fullchain.pem" \
-    -subj "/CN=${DOMAIN}" 2>/dev/null
-
 # Write nginx configs
-# default.conf: HTTP proxy + acme-challenge + redirect to HTTPS
+# default.conf: HTTP proxy + acme-challenge
 cat > "$APP_DIR/nginx/default.conf" << NGINXEOF
 server {
     listen 80;
@@ -111,10 +104,10 @@ server {
 }
 NGINXEOF
 
-# ssl.conf: Uses self-signed cert initially, replaced after real cert
+# ssl.conf: Uses self-signed cert
 cat > "$APP_DIR/nginx/ssl.conf" << SLEOF
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
     server_name ${DOMAIN};
 
     ssl_certificate     /etc/nginx/ssl-temp/fullchain.pem;
@@ -152,7 +145,16 @@ server {
 }
 SLEOF
 
-echo "  OK certificados temporales + nginx configurado"
+# Ensure self-signed certs exist before compose up
+# (needed for the volume mount in docker-compose.yml)
+if [ ! -f "$APP_DIR/nginx/ssl-fullchain.pem" ]; then
+    echo "  Generando certificado temporal..."
+    openssl req -x509 -nodes -days 1 -newkey rsa:2048 \
+        -keyout "$APP_DIR/nginx/ssl-privkey.pem" \
+        -out "$APP_DIR/nginx/ssl-fullchain.pem" \
+        -subj "/CN=${DOMAIN}" 2>/dev/null
+    echo "  OK cert temporal generado"
+fi
 
 # ── 6. Start stack ────────────────────────────────────────────────
 echo ""
@@ -208,9 +210,7 @@ echo "==============================="
 echo "  Let's Encrypt SSL..."
 echo "==============================="
 
-docker compose up -d certbot
-sleep 3
-
+# certbot container already running, just exec the command
 docker compose run --rm certbot certonly \
     --webroot \
     --webroot-path=/var/www/certbot \

@@ -64,6 +64,8 @@ services:
       - ./nginx/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
       - ./nginx/certbot/www:/var/www/certbot:ro
       - ./nginx/certbot/conf:/etc/letsencrypt:ro
+      - ./nginx/ssl-fullchain.pem:/etc/nginx/ssl-temp/fullchain.pem:ro
+      - ./nginx/ssl-privkey.pem:/etc/nginx/ssl-temp/privkey.pem:ro
     depends_on:
       - backend
     networks:
