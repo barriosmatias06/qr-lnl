@@ -57,7 +57,9 @@ echo "  OK"
 # 4 QRs
 echo "[4/7] QRs..."
 if ! python3 -c "import qrcode" &>/dev/null; then
-    pip3 install --quiet qrcode[pil] Pillow tqdm
+    apt-get install -y python3-pip
+    pip3 install --break-system-packages --quiet qrcode[pil] Pillow tqdm 2>/dev/null || \
+    python3 -m pip install --break-system-packages --quiet qrcode[pil] Pillow tqdm
 fi
 python3 generate_qr.py --url "https://${DOMAIN}"
 echo "  OK $(find qr_codes -name '*.png' | wc -l) QRs"
