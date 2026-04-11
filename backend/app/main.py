@@ -154,7 +154,7 @@ async def serve_qr_image(filename: str):
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     """Sirve el HTML del scanner."""
-    index_path = Path(__file__).parent.parent.parent / "frontend" / "index.html"
+    index_path = Path(__file__).parent.parent / "frontend" / "index.html"
     if not index_path.is_file():
         raise HTTPException(status_code=404, detail="Frontend no encontrado")
     return index_path.read_text(encoding="utf-8")
