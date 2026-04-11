@@ -28,7 +28,9 @@ def gen_unique_hashes(n: int) -> list[str]:
 
 async def seed_from_csv(session: AsyncSession, csv_path: Optional[Path] = None) -> int:
     """
-    Lee el CSV de asistentes, genera hashes únicos, y los inserta en la DB.
+    Lee el CSV de asistentes y los inserta en la DB.
+    Si el CSV ya tiene columna Hash_Unico, la reutiliza.
+    Si no, genera hashes nuevos.
     Retorna la cantidad de asistentes insertados.
     """
     path = csv_path or CSV_PATH
@@ -37,8 +39,12 @@ async def seed_from_csv(session: AsyncSession, csv_path: Optional[Path] = None) 
         raise FileNotFoundError(f"CSV no encontrado: {path}")
 
     attendees = []
+    has_hash_col = False
+
     with open(path, newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
+        has_hash_col = "Hash_Unico" in (reader.fieldnames or [])
+
         for row in reader:
             nombre = (
                 row.get("Nombre") or row.get("nombre") or
@@ -49,13 +55,19 @@ async def seed_from_csv(session: AsyncSession, csv_path: Optional[Path] = None) 
                 row.get("EMAIL") or ""
             ).strip()
             if nombre:
-                attendees.append({"nombre": nombre, "email": email})
+                data = {"nombre": nombre, "email": email}
+                if has_hash_col:
+                    data["hash"] = row.get("Hash_Unico", "").strip()
+                attendees.append(data)
 
     if not attendees:
         raise ValueError("CSV vacío o sin datos válidos")
 
-    # Generar hashes
-    hashes = gen_unique_hashes(len(attendees))
+    # Generar hashes solo si el CSV no los tiene
+    if not has_hash_col:
+        hashes = gen_unique_hashes(len(attendees))
+    else:
+        hashes = [att.get("hash", "") for att in attendees]
 
     # Crear objetos Attendee
     records = []
