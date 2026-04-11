@@ -4,7 +4,8 @@
       "Bash(sed *)",
       "Bash(python3 *)",
       "Bash(cp *)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(git add *)"
     ]
   },
   "$version": 3
