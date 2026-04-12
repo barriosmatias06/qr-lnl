@@ -18,7 +18,11 @@
   // ── Helpers ────────────────────────────────────────────────────────────────
   function $(sel) { return document.querySelector(sel); }
   function $$(sel) { return document.querySelectorAll(sel); }
-  function setText(id, val) { var el = $(id); if (el) el.textContent = val; }
+  function setText(id, val) {
+    var el = document.getElementById(id);
+    console.log('[setText]', id, '=', val, 'found:', !!el);
+    if (el) el.textContent = val;
+  }
   function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
   function showToast(msg, type) {
@@ -176,9 +180,15 @@
       .then(function(json) {
         console.log('[Invitations] Data:', json);
         if (loading) loading.style.display = 'none';
-        setText('inv-total', json.total || 0);
-        setText('inv-used', json.used || 0);
-        setText('inv-unused', json.unused || 0);
+
+        var total = json.total || 0;
+        var used = json.used || 0;
+        var unused = json.unused || 0;
+        console.log('[Invitations] Setting stats - total:', total, 'used:', used, 'unused:', unused);
+
+        setText('inv-total', total);
+        setText('inv-used', used);
+        setText('inv-unused', unused);
 
         state.invitations = json.codes || [];
 
