@@ -278,13 +278,24 @@
   }
 
   function doGenerate() {
+    console.log('[Generate] Button clicked');
     var count = parseInt($('#gen-count').value) || 1;
     if (count < 1) count = 1;
     if (count > 100) count = 100;
+    console.log('[Generate] Count:', count);
 
     fetch('/admin/api/invitations/generate?count=' + count, { method: 'POST' })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        console.log('[Generate] Response status:', r.status);
+        if (!r.ok) {
+          return r.text().then(function(text) {
+            throw new Error('HTTP ' + r.status + ': ' + text);
+          });
+        }
+        return r.json();
+      })
       .then(function(json) {
+        console.log('[Generate] Success:', json);
         state.lastGeneratedCodes = json.codes || [];
         var html = [];
         for (var i = 0; i < state.lastGeneratedCodes.length; i++) {
@@ -299,13 +310,13 @@
         loadInvitations();
         showToast(json.count + ' códigos generados');
 
-        // Bind copy buttons
         $$('.btn-copy-gen').forEach(function(btn) {
           btn.addEventListener('click', function() { copyCode(btn.getAttribute('data-code')); });
         });
       })
-      .catch(function() {
-        showToast('Error al generar códigos', 'error');
+      .catch(function(err) {
+        console.error('[Generate] Error:', err);
+        showToast('Error: ' + err.message, 'error');
       });
   }
 
@@ -361,21 +372,26 @@
 
     // Generate codes modal buttons
     var btnOpen = $('#btn-generate');
-    if (btnOpen) btnOpen.addEventListener('click', openGenerateModal);
-
     var btnClose = $('#btn-close-generate');
-    if (btnClose) btnClose.addEventListener('click', closeGenerateModal);
-
     var btnConfirm = $('#btn-confirm-generate');
-    if (btnConfirm) btnConfirm.addEventListener('click', doGenerate);
-
     var btnCopyAll = $('#btn-copy-all');
-    if (btnCopyAll) btnCopyAll.addEventListener('click', copyAllCodes);
-
     var btnWA = $('#btn-whatsapp');
+
+    console.log('[Init] Buttons found:', {
+      open: !!btnOpen,
+      close: !!btnClose,
+      confirm: !!btnConfirm,
+      copyAll: !!btnCopyAll,
+      whatsapp: !!btnWA
+    });
+
+    if (btnOpen) btnOpen.addEventListener('click', openGenerateModal);
+    if (btnClose) btnClose.addEventListener('click', closeGenerateModal);
+    if (btnConfirm) btnConfirm.addEventListener('click', doGenerate);
+    if (btnCopyAll) btnCopyAll.addEventListener('click', copyAllCodes);
     if (btnWA) btnWA.addEventListener('click', shareAllWhatsApp);
 
-    console.log('Admin dashboard initialized');
+    console.log('[Init] Admin dashboard initialized');
 
     // Load data
     loadData();
