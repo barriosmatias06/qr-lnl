@@ -160,15 +160,27 @@ async def serve_qr_image(filename: str):
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index(request: Request):
-    """Sirve el HTML del scanner o redirige a admin según subdominio."""
+    """Ruteo por dominio:
+    - dominic.com.ar        → redirect a /register (invitados se registran)
+    - empleados.dominic.com.ar → scanner QR (personal de seguridad)
+    - admin.dominic.com.ar  → redirect a /admin (panel de administración)
+    """
     host = request.headers.get("host", "")
+
     if host.startswith("admin."):
         from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/admin")
-    index_path = Path(__file__).parent.parent / "frontend" / "index.html"
-    if not index_path.is_file():
-        raise HTTPException(status_code=404, detail="Frontend no encontrado")
-    return index_path.read_text(encoding="utf-8")
+        return RedirectResponse(url="/admin", status_code=302)
+
+    if host.startswith("empleados."):
+        # Scanner para personal de seguridad
+        index_path = Path(__file__).parent.parent / "frontend" / "index.html"
+        if not index_path.is_file():
+            raise HTTPException(status_code=404, detail="Frontend no encontrado")
+        return index_path.read_text(encoding="utf-8")
+
+    # dominic.com.ar → redirect a registro
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/register", status_code=302)
 
 
 # Health check para Docker / monitoreo
