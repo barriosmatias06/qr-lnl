@@ -2,7 +2,7 @@
 Modelos SQLAlchemy para la base de datos del evento.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import BigInteger, Boolean, DateTime, String, ForeignKey, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,7 +18,7 @@ class InvitationCode(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
     used: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(datetime.timezone.utc))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     usado_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relación con el attendee que usó este código
@@ -60,7 +60,7 @@ class AdminUser(Base):
     username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(datetime.timezone.utc))
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return f"<AdminUser id={self.id} username={self.username}>"
