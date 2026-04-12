@@ -62,6 +62,7 @@
   function renderStats(json) {
     var total = json.total || 0;
     var ingresaron = json.ingresaron || 0;
+    console.log('[Stats] Total:', total, 'Ingresaron:', ingresaron);
     setText('s-total', total);
     setText('s-ingresaron', ingresaron);
     setText('s-pendientes', total - ingresaron);
@@ -154,6 +155,7 @@
 
   // ── Invitations ────────────────────────────────────────────────────────────
   function loadInvitations() {
+    console.log('[Invitations] Loading page:', state.invPage);
     var loading = $('#inv-loading');
     var table = $('#inv-table');
     var noData = $('#inv-no-data');
@@ -163,14 +165,20 @@
 
     var filter = $('#inv-filter').value;
     var url = '/admin/api/invitations?page=' + state.invPage + '&status_filter=' + filter;
+    console.log('[Invitations] Fetching:', url);
 
     fetch(url)
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        console.log('[Invitations] Response status:', r.status);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(function(json) {
+        console.log('[Invitations] Data:', json);
         if (loading) loading.style.display = 'none';
-        setText('inv-total', json.total);
-        setText('inv-used', json.used);
-        setText('inv-unused', json.unused);
+        setText('inv-total', json.total || 0);
+        setText('inv-used', json.used || 0);
+        setText('inv-unused', json.unused || 0);
 
         state.invitations = json.codes || [];
 
