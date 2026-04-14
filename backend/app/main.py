@@ -30,8 +30,20 @@ QR_IMAGES_DIR = Path(os.getenv("QR_IMAGES_DIR", "/app/qr_codes"))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Inicializar DB al arrancar."""
+    """Inicializar DB y ejecutar migraciones al arrancar."""
     await init_db()
+    # Ejecutar migración de role si es necesario
+    try:
+        from app.migrate_add_role import migrate
+        await migrate()
+    except Exception as e:
+        print(f"⚠️  Warning: migración de role falló: {e}")
+    # Crear usuarios admin iniciales si no existen
+    try:
+        from app.seed_admins import seed_admins
+        await seed_admins()
+    except Exception as e:
+        print(f"⚠️  Warning: seed de admins falló: {e}")
     yield
 
 
@@ -188,6 +200,17 @@ async def serve_index(request: Request):
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+# ── Seed admin users ─────────────────────────────────────────────────────
+@app.post("/api/seed-admins")
+async def seed_admin_users():
+    """Crear usuarios admin iniciales si no existen."""
+    from app.seed_admins import seed_admins
+    try:
+        await seed_admins()
+        return {"message": "Usuarios admin creados correctamente"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ── Register routes ──────────────────────────────────────────────────────
 from app.register import router as register_router

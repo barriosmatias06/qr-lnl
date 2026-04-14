@@ -343,8 +343,25 @@
 </head>
 <body>
 
+<!-- ── Login overlay (antes de mostrar herramientas) ──────────────────────── -->
+<div id="login-overlay" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:400px">
+    <div style="font-size:3rem;text-align:center;margin-bottom:16px">🔒</div>
+    <h1 style="font-size:1.5rem;font-weight:800;margin-bottom:8px;text-align:center;color:var(--text)">Control de Acceso</h1>
+    <p style="color:var(--muted);text-align:center;margin-bottom:32px;font-size:.9rem">Ingresá tus credenciales para escanear</p>
+    <form id="scanner-login-form" onsubmit="doScannerLogin(event)">
+      <label for="scanner-user" style="display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:6px">Usuario</label>
+      <input type="text" id="scanner-user" required autocomplete="username" placeholder="4dm1n03" style="width:100%;background:#0f172a;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 16px;font-size:.95rem;margin-bottom:16px">
+      <label for="scanner-pass" style="display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:6px">Contraseña</label>
+      <input type="password" id="scanner-pass" required autocomplete="current-password" placeholder="••••••••" style="width:100%;background:#0f172a;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 16px;font-size:.95rem;margin-bottom:16px">
+      <button type="submit" id="scanner-login-btn" style="width:100%;background:var(--blue);color:#fff;border:none;border-radius:10px;padding:14px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:8px;transition:opacity .15s">Ingresar</button>
+      <div id="scanner-login-error" style="color:var(--red);font-size:.85rem;text-align:center;margin-top:12px;display:none"></div>
+    </form>
+  </div>
+</div>
+
 <!-- ── Landing: solo ESCANEAR ──────────────────────────────────────────── -->
-<div id="landing">
+<div id="landing" style="display:none">
   <div class="landing-emoji">🎫</div>
   <h1 class="landing-title">Control de Acceso</h1>
   <p class="landing-sub">Escaneá tu código QR para ingresar</p>
@@ -421,8 +438,64 @@
   const RESULT_MS   = 3500;
   const COOLDOWN_MS = 8000;
 
-  // ── Si viene ?id=HASH en URL, ir directo al scan ──────────────
-  window.addEventListener('load', () => {
+  // ── Verificar sesión al cargar ────────────────────────────────────
+  let currentUser = null;
+
+  window.addEventListener('load', async () => {
+    try {
+      const res = await fetch('/admin/api/me');
+      if (res.ok) {
+        currentUser = await res.json();
+        showScannerApp();
+      } else {
+        // No autenticado, mostrar login
+        document.getElementById('login-overlay').style.display = 'flex';
+      }
+    } catch (_) {
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+  });
+
+  // ── Login del scanner ───────────────────────────────────────────
+  async function doScannerLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('scanner-login-btn');
+    const err = document.getElementById('scanner-login-error');
+    btn.textContent = 'Verificando...';
+    btn.disabled = true;
+    err.style.display = 'none';
+
+    const body = {
+      username: document.getElementById('scanner-user').value,
+      password: document.getElementById('scanner-pass').value
+    };
+
+    try {
+      const res = await fetch('/admin/api/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        currentUser = await (await fetch('/admin/api/me')).json();
+        showScannerApp();
+      } else {
+        const d = await res.json();
+        err.textContent = d.detail || 'Error de autenticación';
+        err.style.display = 'block';
+      }
+    } catch(e) {
+      err.textContent = 'Error de conexión';
+      err.style.display = 'block';
+    }
+    btn.textContent = 'Ingresar';
+    btn.disabled = false;
+  }
+
+  // ── Mostrar la app del scanner (post-login) ─────────────────────
+  function showScannerApp() {
+    document.getElementById('login-overlay').style.display = 'none';
+    // Si viene ?id=HASH en URL, ir directo al scan
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
     if (id) {
@@ -431,7 +504,7 @@
       showLoading();
       callCheck(id);
     }
-  });
+  }
 
   // ── Ir a escanear ─────────────────────────────────────────────
   function goScan() {
@@ -451,6 +524,11 @@
     document.getElementById('scanner-wrap').style.display = 'none';
     document.getElementById('btn-back').classList.remove('visible');
     document.getElementById('btn-admin').classList.remove('visible');
+    currentUser = null;
+    // Redirigir a logout y volver a login
+    fetch('/admin/api/logout', {method: 'POST'}).finally(() => {
+      window.location.reload();
+    });
   }
 
   // ── Activar scanner (cámara) ──────────────────────────────────

@@ -17,7 +17,7 @@ from sqlalchemy import select, func, desc
 
 from app.database import async_session
 from app.models import Attendee, InvitationCode
-from app.auth import require_user, get_current_user, AdminUser
+from app.auth import require_user, require_super_admin, get_current_user, AdminUser
 
 router = APIRouter()
 
@@ -311,13 +311,20 @@ async def admin_dashboard(request: Request):
     user = await get_current_user(request)
     if not user:
         return RedirectResponse(url="/admin/login", status_code=302)
-    return ADMIN_HTML
+
+    # Inyectar el rol del usuario en el HTML para control frontend
+    html = ADMIN_HTML.replace(
+        '<script src="/static/admin.js"></script>',
+        f'<script>window.CURRENT_USER = {{role: "{user.role}", username: "{user.username}"}};</script>\n'
+        f'<script src="/static/admin.js"></script>'
+    )
+    return html
 
 
 # ── API Endpoints ──────────────────────────────────────────────────────────
 
 @router.get("/api/admin/data")
-async def admin_data(user: AdminUser = Depends(require_user)):
+async def admin_data(user: AdminUser = Depends(require_super_admin)):
     async with async_session() as session:
         total = (await session.execute(select(func.count(Attendee.id)))).scalar() or 0
         ingresaron = (await session.execute(
@@ -376,7 +383,7 @@ async def admin_qr(hash_id: str, user: AdminUser = Depends(require_user)):
 # ── Invitation Code Management ──────────────────────────────────────────
 
 @router.post("/admin/api/invitations/generate")
-async def generate_invitation_codes(count: int = Query(1, ge=1, le=100), user: AdminUser = Depends(require_user)):
+async def generate_invitation_codes(count: int = Query(1, ge=1, le=100), user: AdminUser = Depends(require_super_admin)):
     codes = []
     async with async_session() as session:
         for _ in range(count):
@@ -392,7 +399,7 @@ async def list_invitation_codes(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     status_filter: str = Query("all"),
-    user: AdminUser = Depends(require_user),
+    user: AdminUser = Depends(require_super_admin),
 ):
     async with async_session() as session:
         total = (await session.execute(select(func.count(InvitationCode.id)))).scalar() or 0
@@ -440,7 +447,7 @@ async def list_invitation_codes(
 
 
 @router.post("/admin/api/invitations/{code_id}/revoke")
-async def revoke_invitation_code(code_id: int, user: AdminUser = Depends(require_user)):
+async def revoke_invitation_code(code_id: int, user: AdminUser = Depends(require_super_admin)):
     async with async_session() as session:
         stmt = select(InvitationCode).where(InvitationCode.id == code_id)
         result = await session.execute(stmt)
@@ -456,7 +463,7 @@ async def revoke_invitation_code(code_id: int, user: AdminUser = Depends(require
 
 
 @router.delete("/admin/api/invitations/{code_id}")
-async def delete_invitation_code(code_id: int, user: AdminUser = Depends(require_user)):
+async def delete_invitation_code(code_id: int, user: AdminUser = Depends(require_super_admin)):
     async with async_session() as session:
         stmt = select(InvitationCode).where(InvitationCode.id == code_id)
         result = await session.execute(stmt)

@@ -72,6 +72,16 @@ async def require_user(request: Request) -> AdminUser:
     return user
 
 
+async def require_super_admin(request: Request) -> AdminUser:
+    """Dependency: requiere usuario con rol super_admin."""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autenticado")
+    if user.role != "super_admin":
+        raise HTTPException(status_code=403, detail="Acceso denegado: se requiere rol de administrador")
+    return user
+
+
 # ── Schemas ────────────────────────────────────────────────────────────────
 
 class LoginRequest(BaseModel):
@@ -181,7 +191,7 @@ async def api_login(body: LoginRequest):
     if not user or not user.activo or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos")
 
-    token = create_access_token(data={"sub": user.username})
+    token = create_access_token(data={"sub": user.username, "role": user.role})
     response = JSONResponse(content={"success": True})
     response.set_cookie(
         key="admin_token",
@@ -205,4 +215,4 @@ async def api_logout():
 @router.get("/admin/api/me")
 async def api_me(user: AdminUser = Depends(require_user)):
     """Devuelve info del usuario logueado."""
-    return {"username": user.username, "activo": user.activo}
+    return {"username": user.username, "role": user.role, "activo": user.activo}

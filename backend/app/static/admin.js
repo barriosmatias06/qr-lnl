@@ -15,6 +15,10 @@
     capacity: 1800
   };
 
+  // Check user role
+  var currentUser = window.CURRENT_USER || {role: 'scanner_only'};
+  var isSuperAdmin = currentUser.role === 'super_admin';
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   function $(sel) { return document.querySelector(sel); }
   function $$(sel) { return document.querySelectorAll(sel); }
@@ -43,6 +47,23 @@
     if (tabEl) tabEl.classList.add('active');
     if (contentEl) contentEl.classList.add('active');
     if (name === 'invitations') { state.invPage = 1; loadInvitations(); }
+  }
+
+  // Hide admin tabs for scanner_only users
+  function applyRoleRestrictions() {
+    if (!isSuperAdmin) {
+      // Hide invitations tab
+      var invTab = document.querySelector('.tab[data-tab="invitations"]');
+      var invContent = $('#tab-invitations');
+      if (invTab) invTab.style.display = 'none';
+      if (invContent) invContent.style.display = 'none';
+
+      // Hide generate button
+      var btnGenerate = $('#btn-generate');
+      if (btnGenerate) btnGenerate.style.display = 'none';
+
+      // Hide revoke/delete buttons (handled in render)
+    }
   }
 
   // ── Attendees ──────────────────────────────────────────────────────────────
@@ -214,6 +235,8 @@
 
           if (c.used) {
             html.push('<td><span class="text-muted">—</span></td>');
+          } else if (!isSuperAdmin) {
+            html.push('<td><span class="text-muted">—</span></td>');
           } else {
             html.push('<td class="inv-actions">');
             html.push('<button class="btn btn-sm btn-danger btn-revoke" data-id="' + c.id + '" data-code="' + esc(c.code) + '">Revocar</button>');
@@ -359,6 +382,9 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────
   function init() {
+    // Apply role-based restrictions
+    applyRoleRestrictions();
+
     // Tab switching
     $$('.tab[data-tab]').forEach(function(tab) {
       tab.addEventListener('click', function() {
