@@ -513,7 +513,26 @@
       const res = await fetch('/admin/api/me');
       if (res.ok) {
         currentUser = await res.json();
-        showScannerApp();
+
+        // Si es super_admin, redirigir directo al panel admin
+        if (currentUser.role === 'super_admin') {
+          window.location.href = '/admin';
+          return;
+        }
+
+        // Scanner-only: mostrar app
+        document.getElementById('login-overlay').style.display = 'none';
+        document.getElementById('landing').style.display = 'flex';
+        document.getElementById('landing').classList.remove('gone');
+
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        if (id) {
+          document.getElementById('landing').classList.add('gone');
+          activateScanner();
+          showLoading();
+          callCheck(id);
+        }
       } else {
         // No autenticado, mostrar login
         document.getElementById('login-overlay').style.display = 'flex';
@@ -562,6 +581,17 @@
   // ── Mostrar la app del scanner (post-login) ─────────────────────
   function showScannerApp() {
     document.getElementById('login-overlay').style.display = 'none';
+
+    // Si es super_admin, redirir directo al panel admin
+    if (currentUser && currentUser.role === 'super_admin') {
+      window.location.href = '/admin';
+      return;
+    }
+
+    // Scanner-only: mostrar la app del scanner
+    document.getElementById('landing').style.display = 'flex';
+    document.getElementById('landing').classList.remove('gone');
+
     // Si viene ?id=HASH en URL, ir directo al scan
     const params = new URLSearchParams(window.location.search);
     const id = params.get('id');
@@ -586,13 +616,8 @@
       scanner = null;
     }
     isProcessing = false;
-    document.getElementById('landing').classList.remove('gone');
-    document.getElementById('stats-bar').style.display = 'none';
-    document.getElementById('scanner-wrap').style.display = 'none';
-    document.getElementById('btn-back').classList.remove('visible');
-    document.getElementById('btn-admin').classList.remove('visible');
     currentUser = null;
-    // Redirigir a logout y volver a login
+    // Logout y volver al login
     fetch('/admin/api/logout', {method: 'POST'}).finally(() => {
       window.location.reload();
     });
