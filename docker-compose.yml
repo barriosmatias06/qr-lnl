@@ -48,12 +48,12 @@ services:
       - "traefik.http.routers.register.tls.certresolver=letsencrypt"
       - "traefik.http.routers.register.service=register-svc"
       - "traefik.http.services.register-svc.loadbalancer.server.port=8000"
-      # Empleados subdomain: scanner
-      - "traefik.http.routers.empleados.rule=Host(`empleados.dominic.com.ar`)"
-      - "traefik.http.routers.empleados.entrypoints=websecure"
-      - "traefik.http.routers.empleados.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.empleados.service=empleados-svc"
-      - "traefik.http.services.empleados-svc.loadbalancer.server.port=8000"
+      # Panel subdomain: scanner + admin
+      - "traefik.http.routers.panel.rule=Host(`panel.dominic.com.ar`)"
+      - "traefik.http.routers.panel.entrypoints=websecure"
+      - "traefik.http.routers.panel.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.panel.service=panel-svc"
+      - "traefik.http.services.panel-svc.loadbalancer.server.port=8000"
       # Admin subdomain: dashboard
       - "traefik.http.routers.admin.rule=Host(`admin.dominic.com.ar`)"
       - "traefik.http.routers.admin.entrypoints=websecure"

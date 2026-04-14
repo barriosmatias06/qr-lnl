@@ -162,18 +162,18 @@ async def serve_qr_image(filename: str):
 async def serve_index(request: Request):
     """Ruteo por dominio:
     - dominic.com.ar            → redirect a /register (invitados se registran)
-    - empleados.dominic.com.ar  → scanner QR + panel admin (personal del evento)
-    - admin.dominic.com.ar      → redirect a empleados.dominic.com.ar/admin
+    - panel.dominic.com.ar      → scanner QR + panel admin (personal del evento)
+    - admin.dominic.com.ar      → redirect a panel.dominic.com.ar/admin
     """
     host = request.headers.get("host", "")
     from fastapi.responses import RedirectResponse
 
     if host.startswith("admin."):
-        # Redirige al panel admin en el subdominio de empleados
-        domain = host.replace("admin.", "empleados.")
+        # Redirige al panel admin en el subdominio panel
+        domain = host.replace("admin.", "panel.")
         return RedirectResponse(url=f"https://{domain}/admin", status_code=302)
 
-    if host.startswith("empleados."):
+    if host.startswith("panel."):
         # Scanner para personal de seguridad
         index_path = Path(__file__).parent.parent / "frontend" / "index.html"
         if not index_path.is_file():
