@@ -44,11 +44,18 @@ class Attendee(Base):
     estado_ingreso: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     fecha_ingreso: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Campos VIP / Mercado Pago
+    tipo_acceso: Mapped[str] = mapped_column(String(20), nullable=False, default="GENERAL")  # "GENERAL" | "VIP"
+    pago_confirmado: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    mp_preference_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mp_payment_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    monto_abonar: Mapped[float | None] = mapped_column(nullable=True)
+
     # Relación con el código de invitación usado
     invitation_code_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("invitation_codes.id"), nullable=True)
 
     def __repr__(self):
-        return f"<Attendee id={self.id} nombre={self.nombre} {self.apellido} qr_token={self.qr_token[:8]}...>"
+        return f"<Attendee id={self.id} nombre={self.nombre} {self.apellido} tipo={self.tipo_acceso}>"
 
 
 class AdminUser(Base):

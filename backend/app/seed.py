@@ -44,6 +44,7 @@ async def seed_from_csv(session: AsyncSession, csv_path: Optional[Path] = None) 
     with open(path, newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         has_hash_col = "Hash_Unico" in (reader.fieldnames or [])
+        has_vip_col = "Is_VIP" in (reader.fieldnames or [])
 
         for row in reader:
             nombre = (
@@ -58,6 +59,9 @@ async def seed_from_csv(session: AsyncSession, csv_path: Optional[Path] = None) 
                 data = {"nombre": nombre, "email": email}
                 if has_hash_col:
                     data["hash"] = row.get("Hash_Unico", "").strip()
+                if has_vip_col:
+                    is_vip = row.get("Is_VIP", "").strip().upper()
+                    data["is_vip"] = is_vip in ("1", "TRUE", "YES", "SI", "SÍ", "VIP")
                 attendees.append(data)
 
     if not attendees:
@@ -72,6 +76,7 @@ async def seed_from_csv(session: AsyncSession, csv_path: Optional[Path] = None) 
     # Crear objetos Attendee
     records = []
     for i, att in enumerate(attendees):
+        is_vip = att.get("is_vip", False)
         records.append(Attendee(
             id=i + 1,
             nombre=att["nombre"],
@@ -79,6 +84,8 @@ async def seed_from_csv(session: AsyncSession, csv_path: Optional[Path] = None) 
             hash_unique=hashes[i],
             estado_ingreso=False,
             fecha_ingreso=None,
+            tipo_acceso="VIP" if is_vip else "GENERAL",
+            pago_confirmado=not is_vip,  # GENERAL ya está confirmado, VIP pendiente
         ))
 
     session.add_all(records)

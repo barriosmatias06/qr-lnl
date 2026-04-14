@@ -329,6 +329,54 @@
       opacity: 0.55;
     }
 
+    /* Payment screen */
+    .payment-screen {
+      background: var(--card);
+      border: 2px solid var(--yellow);
+      border-radius: 16px;
+      padding: 32px 24px;
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+      margin: 20px auto;
+    }
+
+    .payment-icon { font-size: 4rem; margin-bottom: 12px; }
+    .payment-title { font-size: 1.4rem; font-weight: 800; margin-bottom: 8px; }
+    .payment-name { font-size: 1.1rem; color: var(--muted); margin-bottom: 16px; }
+    .payment-amount {
+      font-size: 2rem; font-weight: 900; color: var(--yellow);
+      margin: 16px 0;
+    }
+    .payment-desc { color: var(--muted); font-size: 0.85rem; margin-bottom: 24px; }
+
+    .btn-mp {
+      width: 100%;
+      padding: 16px 24px;
+      background: #009EE3;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn-mp:active { transform: scale(0.97); opacity: 0.85; }
+
+    .payment-note {
+      margin-top: 16px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
     .spinner {
       width: 52px; height: 52px;
       border: 4px solid rgba(255,255,255,0.2);
@@ -425,6 +473,25 @@
   <div id="res-name"   class="res-name"></div>
   <div id="res-detail" class="res-detail"></div>
   <div id="res-cd"     class="res-cd"></div>
+</div>
+
+<!-- ── Pantalla de pago VIP ─────────────────────────────────────────────── -->
+<div id="payment-screen-wrap" style="display:none;position:fixed;inset:0;z-index:300;background:var(--bg);overflow-y:auto;padding:20px;display:none;align-items:center;justify-content:center">
+  <div class="payment-screen" id="payment-screen">
+    <div class="payment-icon">💳</div>
+    <h2 class="payment-title">Entrada VIP — Pago Requerido</h2>
+    <p class="payment-name" id="payment-name"></p>
+    <div class="payment-amount" id="payment-amount"></div>
+    <p class="payment-desc">Completá el pago para activar tu entrada VIP</p>
+    <a href="#" target="_blank" class="btn-mp" id="btn-pay" style="text-decoration:none">
+      💳 Pagar con Mercado Pago
+    </a>
+    <p class="payment-note">
+      Una vez completado el pago, volvé a escanear tu QR para ingresar.<br>
+      El sistema actualizará tu estado automáticamente.
+    </p>
+    <button class="btn-ghost" style="margin-top:16px" onclick="closePayment()">← Volver al escáner</button>
+  </div>
 </div>
 
 
@@ -605,6 +672,9 @@
         buzz([200]);
         beep(440, 0.4, 'square');
         break;
+      case 'PAYMENT_REQUIRED':
+        showPaymentScreen(r);
+        break;
       case 'INVALID':
         showResult('error', '❌', 'Código Inválido', 'QR no reconocido', '');
         buzz([300, 100, 300]);
@@ -615,6 +685,60 @@
         buzz([400]);
     }
     refreshStats();
+  }
+
+  // ── Payment Screen ──────────────────────────────────────────
+  function showPaymentScreen(r) {
+    const wrap = qs('#payment-screen-wrap');
+    const name = qs('#payment-name');
+    const amount = qs('#payment-amount');
+    const btn = qs('#btn-pay');
+
+    name.textContent = r.nombre || '';
+    amount.textContent = `$${(r.mp_init_point ? '' : '5000')}`;
+
+    // Crear preferencia de pago si no existe
+    if (!r.mp_preference_id || !r.mp_init_point) {
+      btn.textContent = '⏳ Generando enlace de pago...';
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.6';
+
+      const lastScan = lastHash;
+      fetch('/api/mp/create_preference', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({hash: lastScan})
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.init_point) {
+          btn.href = data.init_point;
+          amount.textContent = `$${data.amount}`;
+          btn.textContent = '💳 Pagar con Mercado Pago';
+          btn.style.pointerEvents = 'auto';
+          btn.style.opacity = '1';
+        }
+      })
+      .catch(() => {
+        btn.textContent = '❌ Error generando pago. Reintentá.';
+        setTimeout(() => {
+          btn.textContent = '💳 Pagar con Mercado Pago';
+          btn.style.pointerEvents = 'auto';
+          btn.style.opacity = '1';
+        }, 3000);
+      });
+    } else {
+      btn.href = r.mp_init_point;
+      btn.textContent = '💳 Pagar con Mercado Pago';
+    }
+
+    wrap.style.display = 'flex';
+    buzz([200, 100, 200, 100, 200]);
+  }
+
+  function closePayment() {
+    qs('#payment-screen-wrap').style.display = 'none';
+    lastHash = '';
   }
 
   function onNetworkError(err) {

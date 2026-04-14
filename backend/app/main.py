@@ -38,6 +38,12 @@ async def lifespan(app: FastAPI):
         await migrate()
     except Exception as e:
         print(f"⚠️  Warning: migración de role falló: {e}")
+    # Ejecutar migración de campos VIP
+    try:
+        from app.migrate_vip_fields import migrate
+        await migrate()
+    except Exception as e:
+        print(f"⚠️  Warning: migración VIP falló: {e}")
     # Crear usuarios admin iniciales si no existen
     try:
         from app.seed_admins import seed_admins
@@ -74,6 +80,7 @@ async def check_attendee(hash: str = Query(..., min_length=8, max_length=64)):
     """
     Valida el hash de un asistente y registra su primer ingreso.
     Usa row-level locking (SELECT ... FOR UPDATE) para evitar race conditions.
+    Para VIP: verifica que el pago esté confirmado antes de permitir ingreso.
     Busca por qr_token o hash_unique (compatibilidad hacia atrás).
     """
     hash_clean = hash.strip().upper()
@@ -96,14 +103,41 @@ async def check_attendee(hash: str = Query(..., min_length=8, max_length=64)):
             if not attendee:
                 return CheckResponse(status=StatusType.INVALID, message="Código no encontrado")
 
+            # ── Verificar VIP: ¿pago confirmado? ──────────────────────
+            if attendee.tipo_acceso == "VIP" and not attendee.pago_confirmado:
+                # VIP sin pago: crear preferencia si no existe
+                init_point = None
+                if attendee.mp_preference_id:
+                    # Intentar obtener el init_point existente
+                    from app.mp import mp_request
+                    try:
+                        resp = await mp_request("GET", f"/checkout/preferences/{attendee.mp_preference_id}")
+                        if resp.status_code == 200:
+                            init_point = resp.json().get("init_point")
+                    except Exception:
+                        pass
+
+                return CheckResponse(
+                    status=StatusType.PAYMENT_REQUIRED,
+                    nombre=f"{attendee.nombre} {attendee.apellido}".strip(),
+                    tipo_acceso="VIP",
+                    pago_confirmado=False,
+                    mp_preference_id=attendee.mp_preference_id,
+                    mp_init_point=init_point,
+                    message="Pago VIP requerido para ingresar",
+                )
+
+            # ── Primer ingreso: marcar y registrar timestamp ──────────
             if attendee.estado_ingreso:
                 return CheckResponse(
                     status=StatusType.ALREADY_USED,
-                    nombre=attendee.nombre,
+                    nombre=f"{attendee.nombre} {attendee.apellido}".strip(),
                     fecha_ingreso=attendee.fecha_ingreso.strftime("%d/%m/%Y %H:%M:%S") if attendee.fecha_ingreso else None,
+                    tipo_acceso=attendee.tipo_acceso,
+                    pago_confirmado=attendee.pago_confirmado,
                 )
 
-            # Primer ingreso: marcar y registrar timestamp
+            # Registrar ingreso
             now = datetime.now(timezone.utc)
             attendee.estado_ingreso = True
             attendee.fecha_ingreso = now
@@ -113,6 +147,8 @@ async def check_attendee(hash: str = Query(..., min_length=8, max_length=64)):
                 status=StatusType.WELCOME,
                 nombre=f"{attendee.nombre} {attendee.apellido}".strip(),
                 fecha_ingreso=now.strftime("%d/%m/%Y %H:%M:%S"),
+                tipo_acceso=attendee.tipo_acceso,
+                pago_confirmado=attendee.pago_confirmado,
             )
 
 
@@ -223,3 +259,7 @@ app.include_router(auth_router)
 # ── Admin routes ──────────────────────────────────────────────────────────
 from app.admin import router as admin_router
 app.include_router(admin_router)
+
+# ── Mercado Pago routes ──────────────────────────────────────────────────
+from app.mp import router as mp_router
+app.include_router(mp_router)

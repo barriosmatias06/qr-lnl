@@ -122,11 +122,21 @@
       var fullName = (a.nombre || '') + ' ' + (a.apellido || '');
       var qrToken = a.qr_token || a.hash_unique || '';
 
+      // VIP badge
+      var tipoBadge = '';
+      if (a.tipo_acceso === 'VIP') {
+        var pagoCls = a.pago_confirmado ? 'status-in' : 'status-pending';
+        var pagoTxt = a.pago_confirmado ? '✓ Pagado' : 'Pendiente';
+        tipoBadge = '<span class="status-badge" style="background:rgba(234,179,8,.15);color:var(--yellow)">VIP</span> ' +
+                    '<span class="status-badge ' + pagoCls + '">' + pagoTxt + '</span>';
+      }
+
       html.push('<tr>');
       html.push('<td><span class="qr-mini" data-hash="' + esc(qrToken) + '" data-name="' + esc(fullName) + '">📱</span></td>');
       html.push('<td>' + esc(a.nombre) + '</td>');
       html.push('<td>' + esc(a.apellido || '—') + '</td>');
       html.push('<td><code>' + esc(a.nro_documento || '—') + '</code></td>');
+      html.push('<td>' + tipoBadge + '</td>');
       html.push('<td><code class="inv-code-cell">' + esc(invCode) + '</code></td>');
       html.push('<td>' + esc(a.invitado_por || '—') + '</td>');
       html.push('<td><span class="status-badge ' + statusCls + '">' + statusTxt + '</span></td>');
@@ -323,9 +333,19 @@
     var count = parseInt($('#gen-count').value) || 1;
     if (count < 1) count = 1;
     if (count > 100) count = 100;
-    console.log('[Generate] Count:', count);
 
-    fetch('/admin/api/invitations/generate?count=' + count, { method: 'POST' })
+    // Get selected type
+    var tipoAcceso = 'GENERAL';
+    var vipRadio = document.querySelector('input[name="gen-type"][value="VIP"]');
+    var generalRadio = document.querySelector('input[name="gen-type"][value="GENERAL"]');
+    if (vipRadio && vipRadio.checked) tipoAcceso = 'VIP';
+    else if (generalRadio && generalRadio.checked) tipoAcceso = 'GENERAL';
+
+    console.log('[Generate] Count:', count, 'Type:', tipoAcceso);
+
+    var url = '/admin/api/invitations/generate?count=' + count + '&tipo_acceso=' + tipoAcceso;
+
+    fetch(url, { method: 'POST' })
       .then(function(r) {
         console.log('[Generate] Response status:', r.status);
         if (!r.ok) {
@@ -337,19 +357,26 @@
       })
       .then(function(json) {
         console.log('[Generate] Success:', json);
-        state.lastGeneratedCodes = json.codes || [];
+        // Store codes - for VIP they have qr_token too
+        state.lastGeneratedCodes = json.attendees && json.attendees.length ? json.attendees : json.codes;
         var html = [];
-        for (var i = 0; i < state.lastGeneratedCodes.length; i++) {
-          var code = state.lastGeneratedCodes[i];
+        var codesToDisplay = Array.isArray(state.lastGeneratedCodes) ? state.lastGeneratedCodes : [];
+        for (var i = 0; i < codesToDisplay.length; i++) {
+          var item = codesToDisplay[i];
+          var code = typeof item === 'string' ? item : item.code;
+          var qrToken = typeof item === 'object' ? item.qr_token : null;
+          var displayHtml = qrToken
+            ? '<code class="inv-code">' + esc(code) + '</code> <span class="text-muted">QR: ' + esc(qrToken.substring(0,8)) + '...</span>'
+            : '<code class="inv-code">' + esc(code) + '</code>';
           html.push('<div class="gen-code-item">' +
-            '<code class="inv-code">' + esc(code) + '</code>' +
+            displayHtml +
             '<button class="btn-icon btn-copy-gen" data-code="' + esc(code) + '">📋</button>' +
             '</div>');
         }
         $('#gen-codes-list').innerHTML = html.join('');
         $('#generated-codes').style.display = 'block';
         loadInvitations();
-        showToast(json.count + ' códigos generados');
+        showToast(json.count + ' códigos generados' + (json.tipo_acceso === 'VIP' ? ' (VIP)' : ''));
 
         $$('.btn-copy-gen').forEach(function(btn) {
           btn.addEventListener('click', function() { copyCode(btn.getAttribute('data-code')); });
@@ -371,12 +398,27 @@
   }
 
   function shareAllWhatsApp() {
-    var text = '🎫 *Código de Invitación al Evento*\n\n';
-    text += 'Usá este código para registrarte:\n\n';
-    for (var i = 0; i < state.lastGeneratedCodes.length; i++) {
-      text += '▸ ' + state.lastGeneratedCodes[i] + '\n';
+    var text = '';
+    // Check if VIP codes were generated
+    if (state.lastGeneratedCodes.length > 0 && state.lastGeneratedCodes[0].qr_token) {
+      // VIP codes - share QR tokens
+      text = '🎫 *Entrada VIP al Evento*\n\n';
+      text += 'Tu código QR para ingresar:\n\n';
+      for (var i = 0; i < state.lastGeneratedCodes.length; i++) {
+        var code = state.lastGeneratedCodes[i];
+        var qrUrl = window.location.origin + '/?id=' + code.qr_token;
+        text += '▸ ' + code.code + ' → ' + qrUrl + '\n';
+      }
+      text += '\n⚠️ *Importante:* Completá el pago al escanear tu QR para activar tu entrada.';
+    } else {
+      // General codes
+      text = '🎫 *Código de Invitación al Evento*\n\n';
+      text += 'Usá este código para registrarte:\n\n';
+      for (var i = 0; i < state.lastGeneratedCodes.length; i++) {
+        text += '▸ ' + state.lastGeneratedCodes[i] + '\n';
+      }
+      text += '\nIngresá a ' + window.location.origin + '/register para completar tu registro.';
     }
-    text += '\nIngresá a ' + window.location.origin + '/register para completar tu registro.';
     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
   }
 

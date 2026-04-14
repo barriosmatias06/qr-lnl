@@ -233,7 +233,7 @@ ADMIN_HTML = """<!DOCTYPE html>
       <div class="loading" id="loading">Cargando datos...</div>
       <table id="table" style="display:none">
         <thead>
-          <tr><th>QR</th><th>Nombre</th><th>Apellido</th><th>Documento</th><th>Código Inv.</th><th>Invitado por</th><th>Estado</th><th>Ingreso</th></tr>
+          <tr><th>QR</th><th>Nombre</th><th>Apellido</th><th>Documento</th><th>Tipo</th><th>Código Inv.</th><th>Invitado por</th><th>Estado</th><th>Ingreso</th></tr>
         </thead>
         <tbody id="tbody"></tbody>
       </table>
@@ -285,6 +285,16 @@ ADMIN_HTML = """<!DOCTYPE html>
         <input type="number" id="gen-count" value="10" min="1" max="100"
                style="width:70px;background:#0f172a;border:1px solid var(--border);border-radius:8px;
                       color:var(--text);padding:8px;text-align:center;font-size:.9rem">
+      </div>
+      <div style="display:flex;gap:16px;align-items:center;justify-content:center;margin-bottom:18px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.85rem;color:var(--muted)">
+          <input type="radio" name="gen-type" value="GENERAL" checked style="accent-color:var(--blue)">
+          General (gratis)
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.85rem;color:var(--yellow)">
+          <input type="radio" name="gen-type" value="VIP" style="accent-color:var(--yellow)">
+          VIP (con pago)
+        </label>
       </div>
       <button class="btn" id="btn-confirm-generate" style="width:100%;margin-bottom:10px">Generar</button>
       <button class="btn" style="width:100%;background:transparent;border:1px solid var(--border)" id="btn-close-generate">Cerrar</button>
@@ -361,6 +371,8 @@ async def admin_data(user: AdminUser = Depends(require_super_admin)):
                 "estado_ingreso": a.estado_ingreso,
                 "fecha_ingreso": a.fecha_ingreso.strftime("%d/%m/%Y %H:%M") if a.fecha_ingreso else None,
                 "invitation_code": attendee_codes.get(a.id, ""),
+                "tipo_acceso": a.tipo_acceso,
+                "pago_confirmado": a.pago_confirmado,
             }
             for a in attendees
         ],
@@ -383,15 +395,60 @@ async def admin_qr(hash_id: str, user: AdminUser = Depends(require_user)):
 # ── Invitation Code Management ──────────────────────────────────────────
 
 @router.post("/admin/api/invitations/generate")
-async def generate_invitation_codes(count: int = Query(1, ge=1, le=100), user: AdminUser = Depends(require_super_admin)):
+async def generate_invitation_codes(
+    count: int = Query(1, ge=1, le=100),
+    tipo_acceso: str = Query("GENERAL"),
+    user: AdminUser = Depends(require_super_admin),
+):
+    """Generar códigos de invitación. Si tipo_acceso=VIP, crea también un Attendee VIP."""
     codes = []
+    attendees_created = []
+
     async with async_session() as session:
         for _ in range(count):
             code_str = _generate_invitation_code()
-            session.add(InvitationCode(code=code_str))
+            inv_code = InvitationCode(code=code_str)
+            session.add(inv_code)
             codes.append(code_str)
+
+            # Si es VIP, crear también el attendee asociado
+            if tipo_acceso == "VIP":
+                import uuid
+                qr_token = uuid.uuid4().hex[:16].upper()
+                attendee = Attendee(
+                    nombre="VIP",
+                    apellido=code_str,  # Usar el código como identificador
+                    qr_token=qr_token,
+                    hash_unique=qr_token,
+                    tipo_acceso="VIP",
+                    pago_confirmado=False,
+                    invitation_code_id=inv_code.id,  # Se asignará después del commit
+                )
+                session.add(attendee)
+                attendees_created.append({"code": code_str, "qr_token": qr_token})
+
         await session.commit()
-    return {"codes": codes, "count": len(codes)}
+
+        # Asignar invitation_code_id a los attendees VIP
+        if attendees_created:
+            for att_data in attendees_created:
+                stmt = select(InvitationCode).where(InvitationCode.code == att_data["code"])
+                result = await session.execute(stmt)
+                inv = result.scalar_one_or_none()
+                if inv:
+                    stmt2 = select(Attendee).where(Attendee.hash_unique == att_data["qr_token"])
+                    result2 = await session.execute(stmt2)
+                    att = result2.scalar_one_or_none()
+                    if att:
+                        att.invitation_code_id = inv.id
+            await session.commit()
+
+    return {
+        "codes": codes,
+        "count": len(codes),
+        "tipo_acceso": tipo_acceso,
+        "attendees": attendees_created if tipo_acceso == "VIP" else [],
+    }
 
 
 @router.get("/admin/api/invitations")
